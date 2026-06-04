@@ -55,11 +55,13 @@ POC command that only prints OS information and does not install packages:
 curl -fsSL https://example.com/vending-auto-setup/install.sh | VENDING_AUTO_SETUP_ARGS=about-os bash
 ```
 
-Bootstrap command that checks whether Git, Node.js, npm, and Docker are installed:
+Bootstrap command that checks whether Git, Node.js, npm, Docker, and the display session type are correct:
 
 ```bash
 curl -fsSL https://example.com/vending-auto-setup/install.sh | VENDING_AUTO_SETUP_ARGS=check bash
 ```
+
+The session check reports `OK Session x11` when the user is logged in on X11. It reports `WARN Session wayland` when the current desktop session is Wayland.
 
 To install from a specific GitHub tag:
 

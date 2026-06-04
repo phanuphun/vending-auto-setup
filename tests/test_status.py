@@ -1,7 +1,7 @@
 from typing import Any
 from unittest.mock import patch
 
-from vending_auto_setup.status import main
+from vending_auto_setup.status import collect_display_session_status, main
 
 
 def test_vending_status_returns_zero_when_all_tools_exist(capsys: Any) -> None:
@@ -27,3 +27,19 @@ def test_vending_status_returns_one_when_a_tool_is_missing(capsys: Any) -> None:
     assert exit_code == 1
     output = capsys.readouterr().out
     assert "MISSING Docker" in output
+
+
+def test_display_session_status_is_ok_for_x11() -> None:
+    with patch.dict("vending_auto_setup.status.os.environ", {"XDG_SESSION_TYPE": "x11"}, clear=True):
+        status = collect_display_session_status()
+
+    assert status.is_x11 is True
+    assert status.session_type == "x11"
+
+
+def test_display_session_status_warns_for_wayland() -> None:
+    with patch.dict("vending_auto_setup.status.os.environ", {"XDG_SESSION_TYPE": "wayland"}, clear=True):
+        status = collect_display_session_status()
+
+    assert status.is_x11 is False
+    assert status.session_type == "wayland"
