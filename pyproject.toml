@@ -1,0 +1,34 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "vending-auto-setup"
+version = "0.1.0"
+description = "Typed Python CLI for preparing Ubuntu vending machines."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Vending Auto Setup" }]
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "mypy>=1.10",
+    "pytest>=8.0",
+    "ruff>=0.5",
+]
+
+[project.scripts]
+vending-auto-setup = "vending_auto_setup.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/vending_auto_setup"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+files = ["src", "tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
