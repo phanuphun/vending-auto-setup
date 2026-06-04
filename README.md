@@ -25,6 +25,12 @@ python -m vending_auto_setup --dry-run install
 python -m vending_auto_setup check
 ```
 
+After installing the Python package, check tool status with:
+
+```bash
+vending-status
+```
+
 On a fresh Ubuntu machine, run the installer with:
 
 ```bash
@@ -47,6 +53,12 @@ POC command that only prints OS information and does not install packages:
 
 ```bash
 curl -fsSL https://example.com/vending-auto-setup/install.sh | VENDING_AUTO_SETUP_ARGS=about-os bash
+```
+
+Bootstrap command that checks whether Git, Node.js, npm, and Docker are installed:
+
+```bash
+curl -fsSL https://example.com/vending-auto-setup/install.sh | VENDING_AUTO_SETUP_ARGS=check bash
 ```
 
 To install from a specific GitHub tag:

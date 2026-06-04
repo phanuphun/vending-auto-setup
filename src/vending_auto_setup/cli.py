@@ -6,7 +6,8 @@ from vending_auto_setup.config import DEFAULT_CONFIG, InstallConfig
 from vending_auto_setup.installers import PhaseOneInstaller
 from vending_auto_setup.os_info import print_os_info
 from vending_auto_setup.runner import CommandRunner
-from vending_auto_setup.system import command_exists, require_linux, require_root
+from vending_auto_setup.status import print_status
+from vending_auto_setup.system import require_linux, require_root
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -35,9 +36,7 @@ def main(argv: list[str] | None = None) -> int:
     runner = CommandRunner(dry_run=args.dry_run)
 
     if args.command == "check":
-        for command in ("node", "npm", "docker", "git"):
-            status = "found" if command_exists(runner, command) else "missing"
-            print(f"{command}: {status}")
+        print_status()
         return 0
 
     if args.command == "about-os":

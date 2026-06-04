@@ -20,6 +20,7 @@ dev = [
 
 [project.scripts]
 vending-auto-setup = "vending_auto_setup.cli:main"
+vending-status = "vending_auto_setup.status:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/vending_auto_setup"]

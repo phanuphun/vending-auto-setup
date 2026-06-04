@@ -8,8 +8,9 @@ def test_check_command_runs_in_dry_run_mode(capsys: Any) -> None:
 
     assert exit_code == 0
     output = capsys.readouterr().out
-    assert "node: found" in output
-    assert "docker: found" in output
+    assert "Vending Auto Setup Status" in output
+    assert "Node.js" in output
+    assert "Docker" in output
 
 
 def test_install_dry_run_uses_requested_versions(capsys: Any) -> None:
