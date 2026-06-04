@@ -4,6 +4,7 @@ import os
 import shutil
 import subprocess
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Sequence
 
 
@@ -22,6 +23,16 @@ class DisplaySessionStatus:
     is_x11: bool
     source: str
 
+
+@dataclass(frozen=True)
+class XorgTouchscreenConfigStatus:
+    path: Path
+    exists: bool
+    has_signature: bool
+
+
+XORG_TOUCHSCREEN_CONFIG_PATH = Path("/etc/X11/xorg.conf.d/99-vending-touchscreen.conf")
+XORG_TOUCHSCREEN_SIGNATURE = "# vending-auto-config: touchscreen-xorg"
 
 TOOLS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("Git", "git", ("git", "--version")),
@@ -56,10 +67,30 @@ def collect_display_session_status() -> DisplaySessionStatus:
     return DisplaySessionStatus(session_type="unknown", is_x11=False, source="not detected")
 
 
+def collect_xorg_touchscreen_config_status(
+    path: Path = XORG_TOUCHSCREEN_CONFIG_PATH,
+) -> XorgTouchscreenConfigStatus:
+    if not path.exists():
+        return XorgTouchscreenConfigStatus(path=path, exists=False, has_signature=False)
+
+    try:
+        content = path.read_text(encoding="utf-8")
+    except OSError:
+        return XorgTouchscreenConfigStatus(path=path, exists=True, has_signature=False)
+
+    return XorgTouchscreenConfigStatus(
+        path=path,
+        exists=True,
+        has_signature=XORG_TOUCHSCREEN_SIGNATURE in content,
+    )
+
+
 def print_status() -> None:
     print("Vending Auto Setup Status")
     print()
     _print_display_session_status(collect_display_session_status())
+    print()
+    _print_xorg_touchscreen_config_status(collect_xorg_touchscreen_config_status())
     print()
     print("[Core Tools]")
     for status in collect_status():
@@ -71,6 +102,8 @@ def main() -> int:
     print("Vending Auto Setup Status")
     print()
     _print_display_session_status(collect_display_session_status())
+    print()
+    _print_xorg_touchscreen_config_status(collect_xorg_touchscreen_config_status())
     print()
     print("[Core Tools]")
     for status in statuses:
@@ -134,3 +167,18 @@ def _print_tool_status(status: ToolStatus) -> None:
     marker = "OK" if status.installed else "MISSING"
     detail = status.version if status.version is not None else "not installed"
     print(f"{marker:7} {status.name:10} {detail}")
+
+
+def _print_xorg_touchscreen_config_status(status: XorgTouchscreenConfigStatus) -> None:
+    print("[Touchscreen]")
+    config_path = status.path.as_posix()
+    if status.has_signature:
+        marker = "OK"
+        detail = f"configured ({config_path})"
+    elif status.exists:
+        marker = "WARN"
+        detail = f"file exists but signature missing ({config_path})"
+    else:
+        marker = "WARN"
+        detail = f"not configured ({config_path})"
+    print(f"{marker:7} {'Xorg':10} {detail}")

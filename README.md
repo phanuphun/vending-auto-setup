@@ -63,6 +63,18 @@ curl -fsSL https://example.com/vending-auto-setup/install.sh | VENDING_AUTO_SETU
 
 The session check reports `OK Session x11` when the user is logged in on X11. It reports `WARN Session wayland` when the current desktop session is Wayland.
 
+The touchscreen Xorg config check looks for:
+
+```text
+/etc/X11/xorg.conf.d/99-vending-touchscreen.conf
+```
+
+and validates this signature comment:
+
+```text
+# vending-auto-config: touchscreen-xorg
+```
+
 To install from a specific GitHub tag:
 
 ```bash
@@ -117,6 +129,45 @@ sudo python3 scripts/dev/virtual_touchscreen.py --tap 960 540
 ```
 
 This does not attach a fake USB device through VirtualBox. It creates a virtual Linux input device inside the guest OS, which is enough for testing `xinput` detection and mapping logic.
+
+## Display And Touchscreen Commands
+
+Show X11 display outputs and input devices:
+
+```bash
+PYTHONPATH=src python3 -m vending_auto_setup display status --display :0
+```
+
+Apply display rotation and touchscreen coordinate mapping for the current session:
+
+```bash
+PYTHONPATH=src python3 -m vending_auto_setup display apply \
+  --display :0 \
+  --output Virtual1 \
+  --touch "Vending Virtual Touchscreen" \
+  --rotate left
+```
+
+Persist touchscreen coordinate mapping through Xorg:
+
+```bash
+sudo PYTHONPATH=src python3 -m vending_auto_setup display persist-xorg \
+  --touch "Vending Virtual Touchscreen" \
+  --rotate left
+```
+
+Supported rotation values are `normal`, `left`, `right`, and `inverted`.
+
+Future persistent Xorg touchscreen config should include the vending signature so `vending-status` can detect it:
+
+```conf
+# vending-auto-config: touchscreen-xorg
+Section "InputClass"
+    Identifier "vending-touchscreen-calibration"
+    MatchProduct "Vending Virtual Touchscreen"
+    Option "CalibrationMatrix" "1 0 0 0 1 0 0 0 1"
+EndSection
+```
 
 ## Configuration
 

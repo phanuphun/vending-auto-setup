@@ -41,3 +41,47 @@ def test_about_os_command_prints_poc_header(capsys: Any) -> None:
     output = capsys.readouterr().out
     assert "Vending Auto Setup POC" in output
     assert "Python:" in output
+
+
+def test_display_apply_dry_run_prints_rotation_and_mapping(capsys: Any) -> None:
+    exit_code = main(
+        [
+            "--dry-run",
+            "display",
+            "apply",
+            "--display",
+            ":0",
+            "--output",
+            "Virtual1",
+            "--touch",
+            "Vending Virtual Touchscreen",
+            "--rotate",
+            "left",
+        ]
+    )
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert "xrandr --output Virtual1 --rotate left" in output
+    assert "Coordinate Transformation Matrix" in output
+    assert "0 -1 1 1 0 0 0 0 1" in output
+
+
+def test_display_persist_xorg_dry_run_prints_config(capsys: Any) -> None:
+    exit_code = main(
+        [
+            "--dry-run",
+            "display",
+            "persist-xorg",
+            "--touch",
+            "Vending Virtual Touchscreen",
+            "--rotate",
+            "normal",
+        ]
+    )
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert "write /etc/X11/xorg.conf.d/99-vending-touchscreen.conf" in output
+    assert "# vending-auto-config: touchscreen-xorg" in output
+    assert 'MatchProduct "Vending Virtual Touchscreen"' in output
