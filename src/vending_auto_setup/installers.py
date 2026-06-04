@@ -100,6 +100,7 @@ class PhaseOneInstaller:
     def _write_file(self, path: str, content: str) -> None:
         print(f"write {path}")
         if self.runner.dry_run:
+            print(content, end="" if content.endswith("\n") else "\n")
             return
         Path(path).write_text(content, encoding="utf-8")
 

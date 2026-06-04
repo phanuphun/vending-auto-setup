@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import platform
 from pathlib import Path
+from typing import Callable, cast
 
 from vending_auto_setup.runner import CommandRunner
 
@@ -13,7 +14,8 @@ def require_linux() -> None:
 
 
 def require_root() -> None:
-    if os.geteuid() != 0:
+    geteuid = cast("Callable[[], int] | None", getattr(os, "geteuid", None))
+    if geteuid is None or geteuid() != 0:
         raise RuntimeError("Run this installer as root, for example: sudo vending-auto-setup install")
 
 

@@ -26,6 +26,18 @@ COORDINATE_TRANSFORMATION_MATRIX = "Coordinate Transformation Matrix"
 DISPLAY_SESSION_BEGIN = f"{DISPLAY_SESSION_SIGNATURE} BEGIN"
 DISPLAY_SESSION_END = f"{DISPLAY_SESSION_SIGNATURE} END"
 
+__all__ = [
+    "DISPLAY_SESSION_SIGNATURE",
+    "ROTATION_MATRICES",
+    "XORG_TOUCHSCREEN_SIGNATURE",
+    "DisplayConfigurator",
+    "build_display_session_block",
+    "build_display_session_script",
+    "build_xorg_touchscreen_config",
+    "matrix_for_rotation",
+    "upsert_managed_block",
+]
+
 
 class DisplayConfigurator:
     def __init__(self, runner: CommandRunner) -> None:

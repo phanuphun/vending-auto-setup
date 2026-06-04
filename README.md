@@ -21,7 +21,16 @@ Phase 2 ที่เริ่มทำแล้ว:
 - persist touchscreen matrix ผ่าน Xorg config
 - persist display rotation ผ่าน `.xprofile` ที่เรียก retry script
 
-WireGuard ยังไม่ได้ implement ในรอบนี้
+Phase 3 WireGuard ที่เริ่มทำแล้ว:
+
+- ติดตั้ง package `wireguard`
+- สร้าง template config เช่น `wg0.conf`
+- validate config โดยไม่พิมพ์ค่า secret key ลง output
+- save config เข้า app storage โดยยังไม่ apply จริง
+- sync config ไปที่ `/etc/wireguard/<interface>.conf` และ enable/restart service
+- เก็บ history ของ config ที่ sync แล้ว
+- อ่าน history แบบ mask secret เป็นค่า default
+- unsync เพื่อนำ config ที่ใช้งานอยู่ออกและ disable service
 
 ## Bootstrap บน Ubuntu ใหม่โดยไม่ต้องมี Git
 
@@ -352,6 +361,99 @@ sudo reboot
 ```
 
 หลัง login กลับมา จอควรถูกหมุน และ touchscreen ควรถูก map ตามค่าที่ตั้งไว้
+
+## WireGuard
+
+WireGuard flow แยก `save` ออกจาก `sync` ชัดเจน:
+
+- `save` คือเก็บ config เข้า app storage แต่ยังไม่นำไปใช้งานจริง
+- `sync` คือเขียน config ไปที่ `/etc/wireguard/<interface>.conf` แล้ว enable/restart service จริง
+
+ติดตั้ง WireGuard:
+
+```bash
+sudo vending-auto-setup wireguard install
+```
+
+สร้าง template config:
+
+```bash
+vending-auto-setup wireguard init-config --name wg0 --output ./wg0.conf
+```
+
+แก้ค่าใน `./wg0.conf` ให้ครบ แล้ว validate:
+
+```bash
+vending-auto-setup wireguard validate --config ./wg0.conf
+```
+
+บันทึก config เข้า app storage โดยยังไม่ apply:
+
+```bash
+vending-auto-setup wireguard save --name wg0 --config ./wg0.conf
+```
+
+นำ config ที่ save ไว้ไปใช้จริง:
+
+```bash
+sudo vending-auto-setup wireguard sync --name wg0
+```
+
+สิ่งที่ `sync` ทำ:
+
+- validate config อีกรอบ
+- backup `/etc/wireguard/wg0.conf` เดิมก่อนเขียนทับ ถ้ามี
+- เขียน `/etc/wireguard/wg0.conf`
+- ตั้ง permission เป็น `600`
+- บันทึก snapshot เข้า history
+- รัน `systemctl enable wg-quick@wg0`
+- รัน `systemctl restart wg-quick@wg0`
+
+ตรวจสถานะ:
+
+```bash
+vending-auto-setup wireguard status --name wg0
+```
+
+ดู history config ที่เคย sync:
+
+```bash
+vending-auto-setup wireguard history --name wg0
+```
+
+อ่าน config จาก history แบบปิด secret key เป็นค่า default:
+
+```bash
+vending-auto-setup wireguard show --name wg0 --id 20260604T120000Z-sync
+```
+
+ถ้าจำเป็นต้องดูค่า secret จริง ให้ระบุ flag ชัดเจน:
+
+```bash
+vending-auto-setup wireguard show --name wg0 --id 20260604T120000Z-sync --reveal-secrets
+```
+
+นำ config ที่ sync ออก:
+
+```bash
+sudo vending-auto-setup wireguard unsync --name wg0
+```
+
+คำสั่งนี้จะ `systemctl disable --now wg-quick@wg0`, backup config ปัจจุบันเข้า history แล้วลบ `/etc/wireguard/wg0.conf`
+
+ค่า default ของ app storage อยู่ที่:
+
+```text
+~/.config/vending-auto-setup/wireguard
+```
+
+ถ้ารันผ่าน `sudo` โปรแกรมจะพยายามใช้ home ของ `SUDO_USER` เพื่อให้ `sync` เห็น config ที่ user เคย `save` ไว้
+
+ข้อควรระวัง:
+
+- ห้าม commit private key หรือ preshared key ลง repo
+- output ปกติจะไม่พิมพ์ค่า `PrivateKey` และ `PresharedKey`
+- history เป็น read-only ผ่าน CLI ถ้าต้องแก้ config ให้สร้าง/แก้ไฟล์ใหม่ แล้ว `save` และ `sync` ใหม่
 
 ## Troubleshooting
 
