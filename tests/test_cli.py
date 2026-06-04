@@ -78,6 +78,8 @@ def test_install_dry_run_can_install_selected_component(capsys: Any) -> None:
 
     assert exit_code == 0
     output = capsys.readouterr().out
+    assert "[vending-auto-setup (0%)] - apt-get update" in output
+    assert "[vending-auto-setup (100%)] - git --version" in output
     assert "apt-get install -y git" in output
     assert "https://deb.nodesource.com" not in output
     assert "download.docker.com" not in output
@@ -99,6 +101,8 @@ def test_uninstall_docker_dry_run_preserves_docker_data(capsys: Any) -> None:
 
     assert exit_code == 0
     output = capsys.readouterr().out
+    assert "[vending-auto-setup (0%)] - systemctl disable --now docker" in output
+    assert "[vending-auto-setup (100%)] - apt-get autoremove -y" in output
     assert "apt-get remove -y docker-ce" in output
     assert "skip /var/lib/docker (Docker data and volumes are preserved)" in output
     assert "remove /etc/apt/sources.list.d/docker.list" not in output
@@ -109,6 +113,8 @@ def test_reset_docker_dry_run_removes_managed_apt_config(capsys: Any) -> None:
 
     assert exit_code == 0
     output = capsys.readouterr().out
+    assert "[vending-auto-setup (0%)] - systemctl disable --now docker" in output
+    assert "[vending-auto-setup (100%)] - apt-get autoremove -y" in output
     assert "apt-get remove -y docker-ce" in output
     assert "remove /etc/apt/sources.list.d/docker.list" in output
     assert "remove /etc/apt/keyrings/docker.asc" in output

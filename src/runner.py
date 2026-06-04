@@ -17,10 +17,23 @@ class CommandResult:
 class CommandRunner:
     def __init__(self, dry_run: bool = False) -> None:
         self.dry_run = dry_run
+        self._progress_total: int | None = None
+        self._progress_current = 0
+
+    def start_progress(self, total: int) -> None:
+        self._progress_total = max(total, 1)
+        self._progress_current = 0
+
+    def stop_progress(self) -> None:
+        self._progress_total = None
+        self._progress_current = 0
+
+    def print_operation(self, operation: str) -> None:
+        print(self._format_operation(operation))
 
     def run(self, args: Sequence[str], check: bool = True) -> CommandResult:
         normalized_args = tuple(args)
-        print(format_command(normalized_args))
+        self.print_operation(format_command(normalized_args))
         if self.dry_run:
             return CommandResult(normalized_args, 0, "", "")
 
@@ -40,6 +53,17 @@ class CommandRunner:
         if check and completed.returncode != 0:
             raise CommandExecutionError(result)
         return result
+
+    def _format_operation(self, operation: str) -> str:
+        if self._progress_total is None:
+            return operation
+
+        if self._progress_total == 1:
+            percent = 100
+        else:
+            percent = round((self._progress_current / (self._progress_total - 1)) * 100)
+        self._progress_current = min(self._progress_current + 1, self._progress_total - 1)
+        return f"[vending-auto-setup ({percent}%)] - {operation}"
 
 
 class CommandExecutionError(RuntimeError):

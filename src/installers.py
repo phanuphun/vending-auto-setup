@@ -116,7 +116,7 @@ class PhaseOneInstaller:
             self.runner.run([command, "--version"], check=False)
 
     def _write_file(self, path: str, content: str) -> None:
-        print(f"write {path}")
+        self.runner.print_operation(f"write {path}")
         if self.runner.dry_run:
             print(content, end="" if content.endswith("\n") else "\n")
             return
@@ -139,3 +139,22 @@ class PhaseOneInstaller:
             else:
                 versioned_packages.append(package)
         return tuple(versioned_packages)
+
+
+def count_install_operations(components: tuple[str, ...]) -> int:
+    total = 2  # apt-get update and common package install
+    for component in components:
+        if component == "node":
+            total += 7
+        elif component == "docker":
+            total += 8
+        elif component == "git":
+            total += 2
+
+    if "node" in components:
+        total += 2  # node --version and npm --version
+    if "docker" in components:
+        total += 1
+    if "git" in components:
+        total += 1
+    return total

@@ -99,7 +99,7 @@ class LifecycleManager:
         if remove_config:
             for path in DOCKER_APT_FILES:
                 self._remove_file(path)
-        print("skip /var/lib/docker (Docker data and volumes are preserved)")
+        self.runner.print_operation("skip /var/lib/docker (Docker data and volumes are preserved)")
 
     def uninstall_git(self) -> None:
         self.runner.run(["apt-get", "purge", "-y", *GIT_PACKAGES], check=False)
@@ -118,34 +118,34 @@ class LifecycleManager:
         self._remove_display_session_block(DISPLAY_SESSION_CONFIG_PATH)
 
     def _remove_display_session_block(self, path: Path) -> None:
-        print(f"remove managed block {_format_path(path)}")
+        self.runner.print_operation(f"remove managed block {_format_path(path)}")
         if self.runner.dry_run or not path.exists():
             return
         content = path.read_text(encoding="utf-8")
         updated_content = remove_managed_block(content)
         if updated_content == content:
-            print(f"skip {_format_path(path)} (managed block not found)")
+            self.runner.print_operation(f"skip {_format_path(path)} (managed block not found)")
             return
         path.write_text(updated_content, encoding="utf-8")
 
     def _remove_file_if_has_signature(self, path: Path, signature: str) -> None:
-        print(f"remove {_format_path(path)}")
+        self.runner.print_operation(f"remove {_format_path(path)}")
         if self.runner.dry_run or not path.exists():
             return
         content = path.read_text(encoding="utf-8")
         if signature not in content:
-            print(f"skip {_format_path(path)} (signature missing)")
+            self.runner.print_operation(f"skip {_format_path(path)} (signature missing)")
             return
         path.unlink()
 
     def _remove_file(self, path: Path) -> None:
-        print(f"remove {_format_path(path)}")
+        self.runner.print_operation(f"remove {_format_path(path)}")
         if self.runner.dry_run or not path.exists():
             return
         path.unlink()
 
     def _remove_dir(self, path: Path) -> None:
-        print(f"remove {_format_path(path)}")
+        self.runner.print_operation(f"remove {_format_path(path)}")
         if self.runner.dry_run or not path.exists():
             return
         for child in sorted(path.rglob("*"), reverse=True):
@@ -166,6 +166,36 @@ def expand_components(components: tuple[str, ...], valid_components: tuple[str, 
             raise ValueError(f"Unsupported component: {component}")
         expanded.append(component)
     return tuple(dict.fromkeys(expanded))
+
+
+def count_uninstall_operations(components: tuple[str, ...]) -> int:
+    total = 1  # apt-get autoremove
+    for component in expand_components(components, INSTALL_COMPONENTS):
+        if component == "node":
+            total += 1
+        elif component == "docker":
+            total += 4
+        elif component == "git":
+            total += 1
+        elif component == "wireguard":
+            total += 2
+    return total
+
+
+def count_reset_operations(components: tuple[str, ...]) -> int:
+    total = 1  # apt-get autoremove
+    for component in expand_components(components, RESET_COMPONENTS):
+        if component == "node":
+            total += 3
+        elif component == "docker":
+            total += 6
+        elif component == "git":
+            total += 1
+        elif component == "wireguard":
+            total += 4
+        elif component == "display":
+            total += 3
+    return total
 
 
 def _format_path(path: Path) -> str:

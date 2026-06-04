@@ -5,9 +5,15 @@ from pathlib import Path
 
 from config import APP_VERSION, DEFAULT_CONFIG, InstallConfig
 from display import ROTATION_MATRICES, DisplayConfigurator
-from installers import PhaseOneInstaller
+from installers import PhaseOneInstaller, count_install_operations
 from os_info import print_os_info
-from reset import INSTALL_COMPONENTS, RESET_COMPONENTS, LifecycleManager
+from reset import (
+    INSTALL_COMPONENTS,
+    RESET_COMPONENTS,
+    LifecycleManager,
+    count_reset_operations,
+    count_uninstall_operations,
+)
 from runner import CommandRunner
 from status import print_status
 from system import require_linux, require_root
@@ -212,10 +218,17 @@ def main(argv: list[str] | None = None) -> int:
         if "all" in components:
             components = (*INSTALL_COMPONENTS,)
         core_components = tuple(component for component in components if component in {"node", "docker", "git"})
-        if core_components:
-            installer.install_components(core_components)
+        total_operations = count_install_operations(core_components) if core_components else 0
         if "wireguard" in components:
-            WireGuardManager(runner).install()
+            total_operations += 2
+        runner.start_progress(total_operations)
+        try:
+            if core_components:
+                installer.install_components(core_components)
+            if "wireguard" in components:
+                WireGuardManager(runner).install()
+        finally:
+            runner.stop_progress()
         return 0
 
     if args.command == "display":
@@ -268,7 +281,11 @@ def main(argv: list[str] | None = None) -> int:
             if not args.dry_run:
                 require_linux()
                 require_root()
-            manager.install()
+            runner.start_progress(2)
+            try:
+                manager.install()
+            finally:
+                runner.stop_progress()
             return 0
 
         if args.wireguard_command == "init-config":
@@ -316,9 +333,17 @@ def main(argv: list[str] | None = None) -> int:
         )
         components = tuple(args.component)
         if args.command == "uninstall":
-            lifecycle_manager.uninstall(components=components, wireguard_name=args.wireguard_name)
+            runner.start_progress(count_uninstall_operations(components))
+            try:
+                lifecycle_manager.uninstall(components=components, wireguard_name=args.wireguard_name)
+            finally:
+                runner.stop_progress()
             return 0
-        lifecycle_manager.reset(components=components, wireguard_name=args.wireguard_name)
+        runner.start_progress(count_reset_operations(components))
+        try:
+            lifecycle_manager.reset(components=components, wireguard_name=args.wireguard_name)
+        finally:
+            runner.stop_progress()
         return 0
 
     parser.error(f"Unknown command: {args.command}")
