@@ -33,6 +33,10 @@ Phase 2 ส่วน display/touchscreen เริ่มทำแล้ว:
 - อ่าน history แบบ mask secret เป็นค่า default
 - unsync เพื่อ disable service และนำ active config ออก
 - รองรับ dry-run ก่อนทำจริง
+- ติดตั้งเฉพาะ component ที่เลือกผ่าน `install --component`
+- ถอนติดตั้งเฉพาะ component ที่เลือกผ่าน `uninstall --component`
+- reset component ที่เลือกโดยถอน package/service และลบ config ที่โปรแกรมสร้าง
+- reset Docker โดยไม่ลบ `/var/lib/docker`
 
 คำสั่งหลัก:
 
@@ -72,6 +76,18 @@ vending-auto-setup wireguard show --name wg0 --id <history-id>
 sudo vending-auto-setup wireguard unsync --name wg0
 ```
 
+```bash
+sudo vending-auto-setup install --component node --component docker
+```
+
+```bash
+sudo vending-auto-setup uninstall --component docker
+```
+
+```bash
+sudo vending-auto-setup reset --component all
+```
+
 ข้อควรระวัง:
 
 - ห้าม generate หรือ commit private key ลง repo
@@ -94,7 +110,6 @@ sudo vending-auto-setup wireguard unsync --name wg0
 - เพิ่ม command รวมสำหรับ setup display แบบครบชุด เช่น `display configure`
 - เพิ่มการ detect output/touch device แบบ interactive หรือ auto-select
 - เพิ่ม log ของ `display-session.sh`
-- เพิ่ม command uninstall/reset สำหรับ display config
 - เพิ่ม check ว่า Docker daemon active หรือไม่
 - เพิ่ม check ว่า user อยู่ใน `docker` group หรือไม่
 - ทำ `.deb` package หลัง CLI stable

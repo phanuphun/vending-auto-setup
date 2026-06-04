@@ -5,7 +5,7 @@ import platform
 from pathlib import Path
 from typing import Callable, cast
 
-from vending_auto_setup.runner import CommandRunner
+from runner import CommandRunner
 
 
 def require_linux() -> None:

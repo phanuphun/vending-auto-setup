@@ -5,8 +5,8 @@ import shlex
 import stat
 from pathlib import Path
 
-from vending_auto_setup.runner import CommandRunner
-from vending_auto_setup.status import (
+from runner import CommandRunner
+from status import (
     DISPLAY_SESSION_CONFIG_PATH,
     DISPLAY_SESSION_SCRIPT_PATH,
     DISPLAY_SESSION_SCRIPT_SIGNATURE,
@@ -35,6 +35,7 @@ __all__ = [
     "build_display_session_script",
     "build_xorg_touchscreen_config",
     "matrix_for_rotation",
+    "remove_managed_block",
     "upsert_managed_block",
 ]
 
@@ -232,3 +233,18 @@ def upsert_managed_block(existing_content: str, managed_block: str) -> str:
     if end < len(existing_content) and existing_content[end : end + 1] == "\n":
         end += 1
     return f"{existing_content[:start]}{managed_block}{existing_content[end:]}"
+
+
+def remove_managed_block(existing_content: str) -> str:
+    if DISPLAY_SESSION_BEGIN not in existing_content:
+        return existing_content
+
+    start = existing_content.index(DISPLAY_SESSION_BEGIN)
+    end = existing_content.find(DISPLAY_SESSION_END, start)
+    if end == -1:
+        return existing_content
+
+    end += len(DISPLAY_SESSION_END)
+    if end < len(existing_content) and existing_content[end : end + 1] == "\n":
+        end += 1
+    return f"{existing_content[:start]}{existing_content[end:]}"

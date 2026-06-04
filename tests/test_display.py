@@ -1,12 +1,13 @@
 from pathlib import Path
 
-from vending_auto_setup.display import (
+from display import (
     DISPLAY_SESSION_SIGNATURE,
     XORG_TOUCHSCREEN_SIGNATURE,
     build_display_session_block,
     build_display_session_script,
     build_xorg_touchscreen_config,
     matrix_for_rotation,
+    remove_managed_block,
     upsert_managed_block,
 )
 
@@ -68,3 +69,19 @@ def test_upsert_managed_block_replaces_existing_block() -> None:
     assert "new\n" in content
     assert "old\n" not in content
     assert "after\n" in content
+
+
+def test_remove_managed_block_removes_only_vending_block() -> None:
+    old_content = (
+        "before\n"
+        "# vending-auto-config: display-session BEGIN\n"
+        "managed\n"
+        "# vending-auto-config: display-session END\n"
+        "after\n"
+    )
+
+    content = remove_managed_block(old_content)
+
+    assert "before\n" in content
+    assert "after\n" in content
+    assert "managed\n" not in content

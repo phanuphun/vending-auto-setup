@@ -62,7 +62,7 @@ wget -qO- https://raw.githubusercontent.com/phanuphun/vending-auto-setup/main/sc
 
 ```bash
 cd ~/vending-auto-setup
-PYTHONPATH=src python3 -m vending_auto_setup check
+PYTHONPATH=src python3 -m cli check
 ```
 
 ถ้าต้องการติดตั้ง package ใน virtual environment:
@@ -80,12 +80,22 @@ vending-auto-setup check
 vending-status
 ```
 
+ติดตั้งเฉพาะบางรายการ:
+
+```bash
+sudo vending-auto-setup install --component git
+sudo vending-auto-setup install --component node --component docker
+sudo vending-auto-setup install --component wireguard
+```
+
+ถ้าไม่ระบุ `--component` คำสั่ง `install` จะติดตั้ง phase 1 ตามค่าเดิม คือ Node.js, Docker และ Git
+
 ## ตรวจสถานะเครื่อง
 
 คำสั่ง:
 
 ```bash
-PYTHONPATH=src python3 -m vending_auto_setup check
+PYTHONPATH=src python3 -m cli check
 ```
 
 ตัวอย่าง output:
@@ -123,7 +133,7 @@ OK      Docker     Docker version 29.5.3, build d1c06ef
 ดู output จอและ input device:
 
 ```bash
-PYTHONPATH=src python3 -m vending_auto_setup display status --display :0
+PYTHONPATH=src python3 -m cli display status --display :0
 ```
 
 คำสั่งนี้จะรัน:
@@ -181,7 +191,7 @@ xinput list-props 13
 คำสั่งนี้มีผลทันทีใน session ปัจจุบัน:
 
 ```bash
-PYTHONPATH=src python3 -m vending_auto_setup display apply \
+PYTHONPATH=src python3 -m cli display apply \
   --display :0 \
   --output Virtual1 \
   --touch "Vending Virtual Touchscreen" \
@@ -198,7 +208,7 @@ xinput set-prop "Vending Virtual Touchscreen" "Coordinate Transformation Matrix"
 กลับจอเป็นปกติ:
 
 ```bash
-PYTHONPATH=src python3 -m vending_auto_setup display apply \
+PYTHONPATH=src python3 -m cli display apply \
   --display :0 \
   --output Virtual1 \
   --touch "Vending Virtual Touchscreen" \
@@ -226,7 +236,7 @@ inverted -1 0 1 0 -1 1 0 0 1
 คำสั่งนี้เขียน config ของ touchscreen matrix ลง Xorg:
 
 ```bash
-sudo PYTHONPATH=src python3 -m vending_auto_setup display persist-xorg \
+sudo PYTHONPATH=src python3 -m cli display persist-xorg \
   --touch "Vending Virtual Touchscreen" \
   --rotate left
 ```
@@ -265,7 +275,7 @@ EndSection
 คำสั่งนี้เขียน config ให้ user session เรียก script ตอน login:
 
 ```bash
-PYTHONPATH=src python3 -m vending_auto_setup display persist-session \
+PYTHONPATH=src python3 -m cli display persist-session \
   --display :0 \
   --output Virtual1 \
   --touch "Vending Virtual Touchscreen" \
@@ -311,19 +321,19 @@ PYTHONPATH=src python3 -m vending_auto_setup display persist-session \
 1. ตรวจว่าเป็น X11:
 
 ```bash
-PYTHONPATH=src python3 -m vending_auto_setup check
+PYTHONPATH=src python3 -m cli check
 ```
 
 2. ดูชื่อจอและ touchscreen:
 
 ```bash
-PYTHONPATH=src python3 -m vending_auto_setup display status --display :0
+PYTHONPATH=src python3 -m cli display status --display :0
 ```
 
 3. ลอง apply runtime ก่อน:
 
 ```bash
-PYTHONPATH=src python3 -m vending_auto_setup display apply \
+PYTHONPATH=src python3 -m cli display apply \
   --display :0 \
   --output Virtual1 \
   --touch "Vending Virtual Touchscreen" \
@@ -333,7 +343,7 @@ PYTHONPATH=src python3 -m vending_auto_setup display apply \
 4. ถ้าถูกต้องแล้ว persist Xorg:
 
 ```bash
-sudo PYTHONPATH=src python3 -m vending_auto_setup display persist-xorg \
+sudo PYTHONPATH=src python3 -m cli display persist-xorg \
   --touch "Vending Virtual Touchscreen" \
   --rotate left
 ```
@@ -341,7 +351,7 @@ sudo PYTHONPATH=src python3 -m vending_auto_setup display persist-xorg \
 5. Persist session script:
 
 ```bash
-PYTHONPATH=src python3 -m vending_auto_setup display persist-session \
+PYTHONPATH=src python3 -m cli display persist-session \
   --display :0 \
   --output Virtual1 \
   --touch "Vending Virtual Touchscreen" \
@@ -351,7 +361,7 @@ PYTHONPATH=src python3 -m vending_auto_setup display persist-session \
 6. ตรวจสถานะ:
 
 ```bash
-PYTHONPATH=src python3 -m vending_auto_setup check
+PYTHONPATH=src python3 -m cli check
 ```
 
 7. Reboot เพื่อทดสอบ cold boot:
@@ -455,6 +465,42 @@ sudo vending-auto-setup wireguard unsync --name wg0
 - output ปกติจะไม่พิมพ์ค่า `PrivateKey` และ `PresharedKey`
 - history เป็น read-only ผ่าน CLI ถ้าต้องแก้ config ให้สร้าง/แก้ไฟล์ใหม่ แล้ว `save` และ `sync` ใหม่
 
+## Uninstall และ Reset
+
+`uninstall` คือถอน package/service ตามรายการที่เลือก แต่ไม่ลบ config ที่เครื่องมือนี้สร้างไว้ ยกเว้นการ stop/disable service ที่เกี่ยวข้อง:
+
+```bash
+sudo vending-auto-setup uninstall --component docker
+sudo vending-auto-setup uninstall --component node --component git
+sudo vending-auto-setup uninstall --component wireguard
+sudo vending-auto-setup uninstall --component all
+```
+
+`reset` คือถอน package/service พร้อมลบ config ที่ `vending-auto-setup` สร้างหรือจัดการไว้ เพื่อให้เครื่องกลับไปใกล้เคียงกับสภาพก่อนติดตั้ง:
+
+```bash
+sudo vending-auto-setup reset --component docker
+sudo vending-auto-setup reset --component node --component wireguard
+sudo vending-auto-setup reset --component display
+sudo vending-auto-setup reset --component all
+```
+
+component ที่รองรับ:
+
+- `install`: `node`, `docker`, `git`, `wireguard`, `all`
+- `uninstall`: `node`, `docker`, `git`, `wireguard`, `all`
+- `reset`: `node`, `docker`, `git`, `wireguard`, `display`, `all`
+
+สิ่งที่ reset ลบ:
+
+- `node`: package `nodejs`, `npm`, NodeSource apt source/key ที่โปรแกรมสร้าง
+- `docker`: Docker packages และ Docker apt source/key ที่โปรแกรมสร้าง
+- `git`: package `git`
+- `wireguard`: service `wg-quick@<interface>`, package WireGuard, active config เช่น `/etc/wireguard/wg0.conf`, และ app storage/history ของ WireGuard
+- `display`: Xorg touchscreen config ที่มี signature ของโปรแกรม, display session script, และ managed block ใน `~/.xprofile`
+
+Docker reset จะไม่ลบ `/var/lib/docker` ดังนั้น volume, image, container data จะยังถูกเก็บไว้
+
 ## Troubleshooting
 
 ถ้า Terminal เปิดไม่ได้ใน VirtualBox:
@@ -510,7 +556,7 @@ sudo reboot
 ค่า default อยู่ใน:
 
 ```text
-src/vending_auto_setup/config.py
+src/config.py
 ```
 
 - `node_major` ค่า default คือ `22`

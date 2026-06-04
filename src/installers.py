@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from vending_auto_setup.config import InstallConfig
-from vending_auto_setup.runner import CommandRunner
-from vending_auto_setup.system import detect_ubuntu_codename
+from config import InstallConfig
+from runner import CommandRunner
+from system import detect_ubuntu_codename
 
 
 APT_COMMON_PACKAGES = (
@@ -35,11 +35,20 @@ class PhaseOneInstaller:
         self.config = config
 
     def install_all(self) -> None:
+        self.install_components(("node", "docker", "git"))
+
+    def install_components(self, components: tuple[str, ...]) -> None:
         self.prepare_apt()
-        self.install_node()
-        self.install_docker()
-        self.install_git()
-        self.print_versions()
+        for component in components:
+            if component == "node":
+                self.install_node()
+            elif component == "docker":
+                self.install_docker()
+            elif component == "git":
+                self.install_git()
+            else:
+                raise ValueError(f"Unsupported install component: {component}")
+        self.print_versions(components)
 
     def prepare_apt(self) -> None:
         self.runner.run(["apt-get", "update"])
@@ -93,8 +102,15 @@ class PhaseOneInstaller:
         package = "git" if self.config.git_version is None else f"git={self.config.git_version}"
         self.runner.run(["apt-get", "install", "-y", package])
 
-    def print_versions(self) -> None:
-        for command in ("node", "npm", "docker", "git"):
+    def print_versions(self, components: tuple[str, ...]) -> None:
+        commands: list[str] = []
+        if "node" in components:
+            commands.extend(("node", "npm"))
+        if "docker" in components:
+            commands.append("docker")
+        if "git" in components:
+            commands.append("git")
+        for command in commands:
             self.runner.run([command, "--version"], check=False)
 
     def _write_file(self, path: str, content: str) -> None:

@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, cast
 
-from vending_auto_setup.runner import CommandRunner
+from runner import CommandRunner
 
 try:
     import pwd as pwd_module

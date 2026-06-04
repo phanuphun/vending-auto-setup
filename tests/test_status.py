@@ -1,7 +1,7 @@
 from typing import Any
 from unittest.mock import patch
 
-from vending_auto_setup.status import (
+from status import (
     DISPLAY_SESSION_SCRIPT_SIGNATURE,
     DISPLAY_SESSION_SIGNATURE,
     XORG_TOUCHSCREEN_SIGNATURE,
@@ -14,8 +14,8 @@ from vending_auto_setup.status import (
 
 
 def test_vending_status_returns_zero_when_all_tools_exist(capsys: Any) -> None:
-    with patch("vending_auto_setup.status.shutil.which", return_value="/usr/bin/tool"):
-        with patch("vending_auto_setup.status._read_version", return_value="tool 1.0.0"):
+    with patch("status.shutil.which", return_value="/usr/bin/tool"):
+        with patch("status._read_version", return_value="tool 1.0.0"):
             exit_code = main()
 
     assert exit_code == 0
@@ -29,8 +29,8 @@ def test_vending_status_returns_one_when_a_tool_is_missing(capsys: Any) -> None:
     def fake_which(command: str) -> str | None:
         return None if command == "docker" else f"/usr/bin/{command}"
 
-    with patch("vending_auto_setup.status.shutil.which", side_effect=fake_which):
-        with patch("vending_auto_setup.status._read_version", return_value="tool 1.0.0"):
+    with patch("status.shutil.which", side_effect=fake_which):
+        with patch("status._read_version", return_value="tool 1.0.0"):
             exit_code = main()
 
     assert exit_code == 1
@@ -39,7 +39,7 @@ def test_vending_status_returns_one_when_a_tool_is_missing(capsys: Any) -> None:
 
 
 def test_display_session_status_is_ok_for_x11() -> None:
-    with patch.dict("vending_auto_setup.status.os.environ", {"XDG_SESSION_TYPE": "x11"}, clear=True):
+    with patch.dict("status.os.environ", {"XDG_SESSION_TYPE": "x11"}, clear=True):
         status = collect_display_session_status()
 
     assert status.is_x11 is True
@@ -47,7 +47,7 @@ def test_display_session_status_is_ok_for_x11() -> None:
 
 
 def test_display_session_status_warns_for_wayland() -> None:
-    with patch.dict("vending_auto_setup.status.os.environ", {"XDG_SESSION_TYPE": "wayland"}, clear=True):
+    with patch.dict("status.os.environ", {"XDG_SESSION_TYPE": "wayland"}, clear=True):
         status = collect_display_session_status()
 
     assert status.is_x11 is False

@@ -19,11 +19,12 @@ dev = [
 ]
 
 [project.scripts]
-vending-auto-setup = "vending_auto_setup.cli:main"
-vending-status = "vending_auto_setup.status:main"
+vending-auto-setup = "cli:main"
+vending-status = "status:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/vending_auto_setup"]
+only-include = ["src"]
+sources = ["src"]
 
 [tool.mypy]
 python_version = "3.10"

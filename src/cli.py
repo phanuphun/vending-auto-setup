@@ -3,14 +3,15 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from vending_auto_setup.config import DEFAULT_CONFIG, InstallConfig
-from vending_auto_setup.display import ROTATION_MATRICES, DisplayConfigurator
-from vending_auto_setup.installers import PhaseOneInstaller
-from vending_auto_setup.os_info import print_os_info
-from vending_auto_setup.runner import CommandRunner
-from vending_auto_setup.status import print_status
-from vending_auto_setup.system import require_linux, require_root
-from vending_auto_setup.wireguard import WireGuardManager
+from config import DEFAULT_CONFIG, InstallConfig
+from display import ROTATION_MATRICES, DisplayConfigurator
+from installers import PhaseOneInstaller
+from os_info import print_os_info
+from reset import INSTALL_COMPONENTS, RESET_COMPONENTS, LifecycleManager
+from runner import CommandRunner
+from status import print_status
+from system import require_linux, require_root
+from wireguard import WireGuardManager
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -22,10 +23,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     subcommands = parser.add_subparsers(dest="command", required=True)
 
-    install = subcommands.add_parser("install", help="Run phase 1 installation.")
+    install = subcommands.add_parser("install", help="Run installation.")
     install.add_argument("--node-major", type=int, default=DEFAULT_CONFIG.node_major)
     install.add_argument("--docker-version", default=DEFAULT_CONFIG.docker_version)
     install.add_argument("--git-version", default=DEFAULT_CONFIG.git_version)
+    install.add_argument(
+        "--component",
+        action="append",
+        choices=(*INSTALL_COMPONENTS, "all"),
+        help="Install only this component. Repeatable. Defaults to node, docker, and git.",
+    )
 
     subcommands.add_parser("check", help="Show whether phase 1 tools are present.")
     subcommands.add_parser("about-os", help="Print OS information for bootstrap POC.")
@@ -106,6 +113,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     wireguard_unsync = wireguard_subcommands.add_parser("unsync", help="Disable service and remove the active config.")
     add_wireguard_name_argument(wireguard_unsync)
+
+    uninstall = subcommands.add_parser("uninstall", help="Uninstall selected installed components.")
+    add_component_arguments(uninstall, (*INSTALL_COMPONENTS, "all"))
+    add_lifecycle_arguments(uninstall)
+
+    reset = subcommands.add_parser(
+        "reset",
+        help="Uninstall selected components and remove vending-auto-setup managed configs.",
+    )
+    add_component_arguments(reset, (*RESET_COMPONENTS, "all"))
+    add_lifecycle_arguments(reset)
     return parser
 
 
@@ -121,6 +139,22 @@ def add_x_session_arguments(parser: argparse.ArgumentParser) -> None:
 
 def add_wireguard_name_argument(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--name", "--interface", default="wg0", help="WireGuard interface name. Defaults to wg0.")
+
+
+def add_component_arguments(parser: argparse.ArgumentParser, choices: tuple[str, ...]) -> None:
+    parser.add_argument(
+        "--component",
+        action="append",
+        choices=choices,
+        required=True,
+        help="Component to affect. Repeatable. Use all for every supported component.",
+    )
+
+
+def add_lifecycle_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--wireguard-name", "--wireguard-interface", default="wg0")
+    parser.add_argument("--wireguard-store-dir", type=Path)
+    parser.add_argument("--wireguard-dir", type=Path, default=Path("/etc/wireguard"), help=argparse.SUPPRESS)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -147,7 +181,15 @@ def main(argv: list[str] | None = None) -> int:
             docker_version=args.docker_version,
             git_version=args.git_version,
         )
-        PhaseOneInstaller(runner, config).install_all()
+        installer = PhaseOneInstaller(runner, config)
+        components = tuple(args.component) if args.component else ("node", "docker", "git")
+        if "all" in components:
+            components = (*INSTALL_COMPONENTS,)
+        core_components = tuple(component for component in components if component in {"node", "docker", "git"})
+        if core_components:
+            installer.install_components(core_components)
+        if "wireguard" in components:
+            WireGuardManager(runner).install()
         return 0
 
     if args.command == "display":
@@ -236,6 +278,22 @@ def main(argv: list[str] | None = None) -> int:
                 require_root()
             manager.unsync(name=args.name)
             return 0
+
+    if args.command in {"uninstall", "reset"}:
+        if not args.dry_run:
+            require_linux()
+            require_root()
+        lifecycle_manager = LifecycleManager(
+            runner,
+            wireguard_store_dir=args.wireguard_store_dir,
+            wireguard_dir=args.wireguard_dir,
+        )
+        components = tuple(args.component)
+        if args.command == "uninstall":
+            lifecycle_manager.uninstall(components=components, wireguard_name=args.wireguard_name)
+            return 0
+        lifecycle_manager.reset(components=components, wireguard_name=args.wireguard_name)
+        return 0
 
     parser.error(f"Unknown command: {args.command}")
     return 2

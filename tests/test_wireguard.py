@@ -3,8 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from vending_auto_setup.cli import main
-from vending_auto_setup.wireguard import mask_secrets, validate_config_content
+from cli import main
+from wireguard import mask_secrets, validate_config_content
 
 
 VALID_CONFIG = """\

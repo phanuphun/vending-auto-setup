@@ -39,11 +39,11 @@ curl -fsSL "$archive_url" -o "$work_dir/source.tar.gz"
 tar -xzf "$work_dir/source.tar.gz" -C "$work_dir"
 source_dir="$(find "$work_dir" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
 
-if [[ -z "$source_dir" || ! -d "$source_dir/src/vending_auto_setup" ]]; then
+if [[ -z "$source_dir" || ! -f "$source_dir/src/cli.py" ]]; then
   echo "Downloaded archive does not look like vending-auto-setup source."
   exit 1
 fi
 
 cd "$source_dir"
 echo "Running vending-auto-setup ${INSTALL_ARGS}"
-PYTHONPATH=src python3 -m vending_auto_setup ${INSTALL_ARGS}
+PYTHONPATH=src python3 -m cli ${INSTALL_ARGS}
