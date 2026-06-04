@@ -1,10 +1,19 @@
 from __future__ import annotations
 
 import os
+import shlex
+import stat
 from pathlib import Path
 
 from vending_auto_setup.runner import CommandRunner
-from vending_auto_setup.status import XORG_TOUCHSCREEN_CONFIG_PATH, XORG_TOUCHSCREEN_SIGNATURE
+from vending_auto_setup.status import (
+    DISPLAY_SESSION_CONFIG_PATH,
+    DISPLAY_SESSION_SCRIPT_PATH,
+    DISPLAY_SESSION_SCRIPT_SIGNATURE,
+    DISPLAY_SESSION_SIGNATURE,
+    XORG_TOUCHSCREEN_CONFIG_PATH,
+    XORG_TOUCHSCREEN_SIGNATURE,
+)
 
 ROTATION_MATRICES: dict[str, tuple[str, ...]] = {
     "normal": ("1", "0", "0", "0", "1", "0", "0", "0", "1"),
@@ -14,6 +23,8 @@ ROTATION_MATRICES: dict[str, tuple[str, ...]] = {
 }
 
 COORDINATE_TRANSFORMATION_MATRIX = "Coordinate Transformation Matrix"
+DISPLAY_SESSION_BEGIN = f"{DISPLAY_SESSION_SIGNATURE} BEGIN"
+DISPLAY_SESSION_END = f"{DISPLAY_SESSION_SIGNATURE} END"
 
 
 class DisplayConfigurator:
@@ -61,6 +72,42 @@ class DisplayConfigurator:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
 
+    def persist_session(
+        self,
+        output: str,
+        touch: str,
+        rotate: str,
+        x_display: str | None = None,
+        path: Path = DISPLAY_SESSION_CONFIG_PATH,
+        script_path: Path = DISPLAY_SESSION_SCRIPT_PATH,
+        delay_seconds: int = 5,
+        retries: int = 30,
+    ) -> None:
+        matrix = " ".join(matrix_for_rotation(rotate))
+        script_content = build_display_session_script(
+            output=output,
+            touch=touch,
+            rotate=rotate,
+            matrix=matrix,
+            x_display=x_display,
+            delay_seconds=delay_seconds,
+            retries=retries,
+        )
+        content = build_display_session_block(script_path=script_path)
+        print(f"write {script_path.as_posix()}")
+        print(f"write {path.as_posix()}")
+        if self.runner.dry_run:
+            print(script_content.rstrip())
+            print(content.rstrip())
+            return
+
+        script_path.parent.mkdir(parents=True, exist_ok=True)
+        script_path.write_text(script_content, encoding="utf-8")
+        script_path.chmod(script_path.stat().st_mode | stat.S_IXUSR)
+
+        existing_content = path.read_text(encoding="utf-8") if path.exists() else ""
+        path.write_text(upsert_managed_block(existing_content, content), encoding="utf-8")
+
     def _with_x_env(
         self,
         args: list[str],
@@ -96,3 +143,80 @@ def build_xorg_touchscreen_config(touch: str, matrix: str) -> str:
         f'    Option "CalibrationMatrix" "{matrix}"\n'
         "EndSection\n"
     )
+
+
+def build_display_session_script(
+    output: str,
+    touch: str,
+    rotate: str,
+    matrix: str,
+    x_display: str | None,
+    delay_seconds: int,
+    retries: int,
+) -> str:
+    display_line = f"export DISPLAY={shlex.quote(x_display)}\n" if x_display else ""
+    return (
+        "#!/usr/bin/env bash\n"
+        "set -euo pipefail\n"
+        f"{DISPLAY_SESSION_SCRIPT_SIGNATURE}\n"
+        "# Managed by vending-auto-setup. Manual edits may be overwritten.\n"
+        f"sleep {delay_seconds}\n"
+        f"{display_line}"
+        f"OUTPUT={shlex.quote(output)}\n"
+        f"TOUCH_DEVICE={shlex.quote(touch)}\n"
+        f"ROTATE={shlex.quote(rotate)}\n"
+        f"MATRIX={shlex.quote(matrix)}\n"
+        f"RETRIES={retries}\n"
+        "\n"
+        "display_found=0\n"
+        'for attempt in $(seq 1 "$RETRIES"); do\n'
+        '  if xrandr --query | grep -q "^${OUTPUT} connected"; then\n'
+        '    xrandr --output "$OUTPUT" --rotate "$ROTATE"\n'
+        "    display_found=1\n"
+        "    break\n"
+        "  fi\n"
+        '  echo "Waiting for display output ${OUTPUT} (${attempt}/${RETRIES})"\n'
+        "  sleep 1\n"
+        "done\n"
+        'if [ "$display_found" -ne 1 ]; then\n'
+        '  echo "Display output ${OUTPUT} was not found after ${RETRIES} seconds" >&2\n'
+        "  exit 1\n"
+        "fi\n"
+        "\n"
+        'for attempt in $(seq 1 "$RETRIES"); do\n'
+        '  if xinput list --name-only | grep -Fxq "$TOUCH_DEVICE"; then\n'
+        f'    xinput set-prop "$TOUCH_DEVICE" "{COORDINATE_TRANSFORMATION_MATRIX}" $MATRIX\n'
+        "    exit 0\n"
+        "  fi\n"
+        '  echo "Waiting for touchscreen ${TOUCH_DEVICE} (${attempt}/${RETRIES})"\n'
+        "  sleep 1\n"
+        "done\n"
+        "\n"
+        'echo "Touchscreen ${TOUCH_DEVICE} was not found after ${RETRIES} seconds" >&2\n'
+        "exit 1\n"
+    )
+
+
+def build_display_session_block(script_path: Path) -> str:
+    return (
+        f"{DISPLAY_SESSION_BEGIN}\n"
+        "# Managed by vending-auto-setup. Manual edits inside this block may be overwritten.\n"
+        f"{shlex.quote(script_path.as_posix())} &\n"
+        f"{DISPLAY_SESSION_END}\n"
+    )
+
+
+def upsert_managed_block(existing_content: str, managed_block: str) -> str:
+    if DISPLAY_SESSION_BEGIN not in existing_content:
+        separator = "\n" if existing_content and not existing_content.endswith("\n") else ""
+        return f"{existing_content}{separator}{managed_block}"
+
+    start = existing_content.index(DISPLAY_SESSION_BEGIN)
+    end = existing_content.find(DISPLAY_SESSION_END, start)
+    if end == -1:
+        return f"{existing_content.rstrip()}\n{managed_block}"
+
+    end += len(DISPLAY_SESSION_END)
+    if end < len(existing_content) and existing_content[end : end + 1] == "\n":
+        end += 1
+    return f"{existing_content[:start]}{managed_block}{existing_content[end:]}"

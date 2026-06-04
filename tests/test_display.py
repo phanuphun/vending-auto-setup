@@ -1,7 +1,13 @@
+from pathlib import Path
+
 from vending_auto_setup.display import (
+    DISPLAY_SESSION_SIGNATURE,
     XORG_TOUCHSCREEN_SIGNATURE,
+    build_display_session_block,
+    build_display_session_script,
     build_xorg_touchscreen_config,
     matrix_for_rotation,
+    upsert_managed_block,
 )
 
 
@@ -15,3 +21,50 @@ def test_xorg_config_includes_signature_and_touch_name() -> None:
     assert XORG_TOUCHSCREEN_SIGNATURE in config
     assert 'MatchProduct "Vending Virtual Touchscreen"' in config
     assert 'Option "CalibrationMatrix" "1 0 0 0 1 0 0 0 1"' in config
+
+
+def test_display_session_script_includes_retry_rotation_and_mapping() -> None:
+    script = build_display_session_script(
+        output="Virtual1",
+        touch="Vending Virtual Touchscreen",
+        rotate="left",
+        matrix="0 -1 1 1 0 0 0 0 1",
+        x_display=":0",
+        delay_seconds=5,
+        retries=30,
+    )
+
+    assert "vending-auto-config: display-session-script" in script
+    assert "export DISPLAY=:0" in script
+    assert 'xrandr --output "$OUTPUT" --rotate "$ROTATE"' in script
+    assert 'xinput set-prop "$TOUCH_DEVICE"' in script
+    assert "RETRIES=30" in script
+
+
+def test_display_session_block_calls_script() -> None:
+    block = build_display_session_block(script_path=Path("/home/first/.config/vending/display.sh"))
+
+    assert DISPLAY_SESSION_SIGNATURE in block
+    assert "/home/first/.config/vending/display.sh &" in block
+
+
+def test_upsert_managed_block_replaces_existing_block() -> None:
+    old_content = (
+        "before\n"
+        "# vending-auto-config: display-session BEGIN\n"
+        "old\n"
+        "# vending-auto-config: display-session END\n"
+        "after\n"
+    )
+    new_block = (
+        "# vending-auto-config: display-session BEGIN\n"
+        "new\n"
+        "# vending-auto-config: display-session END\n"
+    )
+
+    content = upsert_managed_block(old_content, new_block)
+
+    assert "before\n" in content
+    assert "new\n" in content
+    assert "old\n" not in content
+    assert "after\n" in content

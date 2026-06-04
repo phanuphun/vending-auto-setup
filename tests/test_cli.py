@@ -85,3 +85,30 @@ def test_display_persist_xorg_dry_run_prints_config(capsys: Any) -> None:
     assert "write /etc/X11/xorg.conf.d/99-vending-touchscreen.conf" in output
     assert "# vending-auto-config: touchscreen-xorg" in output
     assert 'MatchProduct "Vending Virtual Touchscreen"' in output
+
+
+def test_display_persist_session_dry_run_prints_xprofile_block(capsys: Any) -> None:
+    exit_code = main(
+        [
+            "--dry-run",
+            "display",
+            "persist-session",
+            "--display",
+            ":0",
+            "--output",
+            "Virtual1",
+            "--touch",
+            "Vending Virtual Touchscreen",
+            "--rotate",
+            "left",
+        ]
+    )
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert "write " in output
+    assert "display-session.sh" in output
+    assert "# vending-auto-config: display-session-script" in output
+    assert "# vending-auto-config: display-session BEGIN" in output
+    assert 'xrandr --output "$OUTPUT" --rotate "$ROTATE"' in output
+    assert 'xinput set-prop "$TOUCH_DEVICE"' in output

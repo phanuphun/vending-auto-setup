@@ -31,8 +31,27 @@ class XorgTouchscreenConfigStatus:
     has_signature: bool
 
 
+@dataclass(frozen=True)
+class DisplaySessionConfigStatus:
+    path: Path
+    exists: bool
+    has_signature: bool
+
+
+@dataclass(frozen=True)
+class DisplaySessionScriptStatus:
+    path: Path
+    exists: bool
+    has_signature: bool
+    executable: bool
+
+
 XORG_TOUCHSCREEN_CONFIG_PATH = Path("/etc/X11/xorg.conf.d/99-vending-touchscreen.conf")
 XORG_TOUCHSCREEN_SIGNATURE = "# vending-auto-config: touchscreen-xorg"
+DISPLAY_SESSION_CONFIG_PATH = Path.home() / ".xprofile"
+DISPLAY_SESSION_SIGNATURE = "# vending-auto-config: display-session"
+DISPLAY_SESSION_SCRIPT_PATH = Path.home() / ".config/vending-auto-setup/display-session.sh"
+DISPLAY_SESSION_SCRIPT_SIGNATURE = "# vending-auto-config: display-session-script"
 
 TOOLS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("Git", "git", ("git", "--version")),
@@ -85,10 +104,55 @@ def collect_xorg_touchscreen_config_status(
     )
 
 
+def collect_display_session_config_status(
+    path: Path = DISPLAY_SESSION_CONFIG_PATH,
+) -> DisplaySessionConfigStatus:
+    if not path.exists():
+        return DisplaySessionConfigStatus(path=path, exists=False, has_signature=False)
+
+    try:
+        content = path.read_text(encoding="utf-8")
+    except OSError:
+        return DisplaySessionConfigStatus(path=path, exists=True, has_signature=False)
+
+    return DisplaySessionConfigStatus(
+        path=path,
+        exists=True,
+        has_signature=DISPLAY_SESSION_SIGNATURE in content,
+    )
+
+
+def collect_display_session_script_status(
+    path: Path = DISPLAY_SESSION_SCRIPT_PATH,
+) -> DisplaySessionScriptStatus:
+    if not path.exists():
+        return DisplaySessionScriptStatus(path=path, exists=False, has_signature=False, executable=False)
+
+    try:
+        content = path.read_text(encoding="utf-8")
+    except OSError:
+        return DisplaySessionScriptStatus(
+            path=path,
+            exists=True,
+            has_signature=False,
+            executable=os.access(path, os.X_OK),
+        )
+
+    return DisplaySessionScriptStatus(
+        path=path,
+        exists=True,
+        has_signature=DISPLAY_SESSION_SCRIPT_SIGNATURE in content,
+        executable=os.access(path, os.X_OK),
+    )
+
+
 def print_status() -> None:
     print("Vending Auto Setup Status")
     print()
     _print_display_session_status(collect_display_session_status())
+    print()
+    _print_display_session_config_status(collect_display_session_config_status())
+    _print_display_session_script_status(collect_display_session_script_status())
     print()
     _print_xorg_touchscreen_config_status(collect_xorg_touchscreen_config_status())
     print()
@@ -102,6 +166,9 @@ def main() -> int:
     print("Vending Auto Setup Status")
     print()
     _print_display_session_status(collect_display_session_status())
+    print()
+    _print_display_session_config_status(collect_display_session_config_status())
+    _print_display_session_script_status(collect_display_session_script_status())
     print()
     _print_xorg_touchscreen_config_status(collect_xorg_touchscreen_config_status())
     print()
@@ -182,3 +249,35 @@ def _print_xorg_touchscreen_config_status(status: XorgTouchscreenConfigStatus) -
         marker = "WARN"
         detail = f"not configured ({config_path})"
     print(f"{marker:7} {'Xorg':10} {detail}")
+
+
+def _print_display_session_config_status(status: DisplaySessionConfigStatus) -> None:
+    print("[Display Config]")
+    config_path = status.path.as_posix()
+    if status.has_signature:
+        marker = "OK"
+        detail = f"configured ({config_path})"
+    elif status.exists:
+        marker = "WARN"
+        detail = f"file exists but signature missing ({config_path})"
+    else:
+        marker = "WARN"
+        detail = f"not configured ({config_path})"
+    print(f"{marker:7} {'Session':10} {detail}")
+
+
+def _print_display_session_script_status(status: DisplaySessionScriptStatus) -> None:
+    script_path = status.path.as_posix()
+    if status.has_signature and status.executable:
+        marker = "OK"
+        detail = f"configured ({script_path})"
+    elif status.exists and status.has_signature:
+        marker = "WARN"
+        detail = f"script is not executable ({script_path})"
+    elif status.exists:
+        marker = "WARN"
+        detail = f"file exists but signature missing ({script_path})"
+    else:
+        marker = "WARN"
+        detail = f"not configured ({script_path})"
+    print(f"{marker:7} {'Script':10} {detail}")

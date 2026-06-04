@@ -2,8 +2,12 @@ from typing import Any
 from unittest.mock import patch
 
 from vending_auto_setup.status import (
+    DISPLAY_SESSION_SCRIPT_SIGNATURE,
+    DISPLAY_SESSION_SIGNATURE,
     XORG_TOUCHSCREEN_SIGNATURE,
     collect_display_session_status,
+    collect_display_session_config_status,
+    collect_display_session_script_status,
     collect_xorg_touchscreen_config_status,
     main,
 )
@@ -75,3 +79,25 @@ def test_xorg_touchscreen_config_status_is_ok_when_signature_exists(tmp_path) ->
 
     assert status.exists is True
     assert status.has_signature is True
+
+
+def test_display_session_config_status_is_ok_when_signature_exists(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    config_path = tmp_path / ".xprofile"
+    config_path.write_text(f"{DISPLAY_SESSION_SIGNATURE}\n", encoding="utf-8")
+
+    status = collect_display_session_config_status(config_path)
+
+    assert status.exists is True
+    assert status.has_signature is True
+
+
+def test_display_session_script_status_is_ok_when_signature_exists_and_executable(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    script_path = tmp_path / "display-session.sh"
+    script_path.write_text(f"{DISPLAY_SESSION_SCRIPT_SIGNATURE}\n", encoding="utf-8")
+    script_path.chmod(0o755)
+
+    status = collect_display_session_script_status(script_path)
+
+    assert status.exists is True
+    assert status.has_signature is True
+    assert status.executable is True

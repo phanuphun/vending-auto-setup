@@ -1,16 +1,62 @@
 # Vending Auto Setup
 
-Automation CLI for preparing Ubuntu 22.04 LTS Desktop vending machines.
+โปรเจกต์นี้เป็น CLI สำหรับเตรียมเครื่อง Ubuntu 22.04 LTS Desktop ที่ใช้กับตู้ vending โดยเป้าหมายคือให้เครื่องใหม่สามารถติดตั้ง software พื้นฐานและตั้งค่าจอ/touchscreen ได้ด้วยคำสั่งให้น้อยที่สุด
 
-Phase 1 installs:
+## สิ่งที่โปรแกรมทำได้ตอนนี้
 
-- Docker Engine from Docker's official apt repository
-- Node.js from NodeSource apt repository
-- Git from Ubuntu apt packages
+Phase 1:
 
-Phase 2 is intentionally left for touchscreen mapping, X11 display rotation, and WireGuard.
+- ติดตั้ง Docker Engine จาก official Docker apt repository
+- ติดตั้ง Node.js จาก NodeSource apt repository
+- ติดตั้ง Git จาก Ubuntu apt package
+- ตรวจสถานะ Git, Node.js, npm, Docker
 
-## Development
+Phase 2 ที่เริ่มทำแล้ว:
+
+- ตรวจว่า session ปัจจุบันเป็น X11 หรือ Wayland
+- ตรวจว่า Xorg touchscreen config ถูกตั้งไว้หรือยัง
+- ตรวจว่า display session script ถูกตั้งไว้หรือยัง
+- หมุนจอด้วย `xrandr`
+- map touchscreen coordinate ด้วย `xinput`
+- persist touchscreen matrix ผ่าน Xorg config
+- persist display rotation ผ่าน `.xprofile` ที่เรียก retry script
+
+WireGuard ยังไม่ได้ implement ในรอบนี้
+
+## Bootstrap บน Ubuntu ใหม่โดยไม่ต้องมี Git
+
+เครื่อง Ubuntu ใหม่อาจยังไม่มี Git ดังนั้น flow แรกจะใช้ `curl` หรือ `wget` เพื่อโหลด bootstrap script จาก GitHub
+
+ตรวจ OS อย่างเดียว:
+
+```bash
+wget -qO- https://raw.githubusercontent.com/phanuphun/vending-auto-setup/main/scripts/install.sh | VENDING_AUTO_SETUP_ARGS=about-os bash
+```
+
+ตรวจสถานะทั้งหมด:
+
+```bash
+wget -qO- https://raw.githubusercontent.com/phanuphun/vending-auto-setup/main/scripts/install.sh | VENDING_AUTO_SETUP_ARGS=check bash
+```
+
+ติดตั้ง Git, Node.js, npm, Docker จริง:
+
+```bash
+wget -qO- https://raw.githubusercontent.com/phanuphun/vending-auto-setup/main/scripts/install.sh | sudo bash
+```
+
+แนะนำให้ snapshot VM ก่อนรัน install จริง เพราะคำสั่งนี้จะแก้ apt repository และติดตั้ง package ลงเครื่อง
+
+## ติดตั้งแบบ local development
+
+ถ้า clone repo มาแล้ว:
+
+```bash
+cd ~/vending-auto-setup
+PYTHONPATH=src python3 -m vending_auto_setup check
+```
+
+ถ้าต้องการติดตั้ง package ใน virtual environment:
 
 ```bash
 python3 -m venv .venv
@@ -18,127 +64,112 @@ python3 -m venv .venv
 python -m pip install -e ".[dev]"
 ```
 
-The current project has no third-party runtime dependencies. For a quick local check:
+หลังติดตั้ง package แล้วจะใช้ command ได้:
 
 ```bash
-python -m vending_auto_setup --dry-run install
-python -m vending_auto_setup check
-```
-
-After installing the Python package, check tool status with:
-
-```bash
+vending-auto-setup check
 vending-status
 ```
 
-On a fresh Ubuntu machine, run the installer with:
+## ตรวจสถานะเครื่อง
+
+คำสั่ง:
 
 ```bash
-sudo vending-auto-setup install
+PYTHONPATH=src python3 -m vending_auto_setup check
 ```
 
-## Bootstrap Without Git
-
-During phase 1, the selected distribution path is GitHub Releases plus a bootstrap script. This avoids requiring Git on a fresh Ubuntu machine.
-
-After publishing the repository to GitHub, update `OWNER/vending-auto-setup` in `scripts/install.sh`, then publish the script through GitHub raw content, a short domain, or another HTTPS location.
-
-Fresh Ubuntu command:
-
-```bash
-curl -fsSL https://example.com/vending-auto-setup/install.sh | sudo bash
-```
-
-POC command that only prints OS information and does not install packages:
-
-```bash
-curl -fsSL https://example.com/vending-auto-setup/install.sh | VENDING_AUTO_SETUP_ARGS=about-os bash
-```
-
-Bootstrap command that checks whether Git, Node.js, npm, Docker, and the display session type are correct:
-
-```bash
-curl -fsSL https://example.com/vending-auto-setup/install.sh | VENDING_AUTO_SETUP_ARGS=check bash
-```
-
-The session check reports `OK Session x11` when the user is logged in on X11. It reports `WARN Session wayland` when the current desktop session is Wayland.
-
-The touchscreen Xorg config check looks for:
+ตัวอย่าง output:
 
 ```text
-/etc/X11/xorg.conf.d/99-vending-touchscreen.conf
+Vending Auto Setup Status
+
+[Session]
+OK      Display    x11 (XDG_SESSION_TYPE)
+
+[Display Config]
+OK      Session    configured (/home/first/.xprofile)
+OK      Script     configured (/home/first/.config/vending-auto-setup/display-session.sh)
+
+[Touchscreen]
+OK      Xorg       configured (/etc/X11/xorg.conf.d/99-vending-touchscreen.conf)
+
+[Core Tools]
+OK      Git        git version 2.34.1
+OK      Node.js    v22.22.3
+OK      npm        10.9.8
+OK      Docker     Docker version 29.5.3, build d1c06ef
 ```
 
-and validates this signature comment:
+ความหมาย:
 
-```text
-# vending-auto-config: touchscreen-xorg
-```
+- `[Session]` ตรวจว่า login เป็น X11 หรือไม่ ถ้าเป็น Wayland จะขึ้น `WARN`
+- `[Display Config] Session` ตรวจว่า `~/.xprofile` มี managed block ของโปรแกรมหรือยัง
+- `[Display Config] Script` ตรวจว่า retry script มีอยู่และ executable หรือยัง
+- `[Touchscreen] Xorg` ตรวจว่า `/etc/X11/xorg.conf.d/99-vending-touchscreen.conf` มี signature หรือยัง
+- `[Core Tools]` ตรวจ Git, Node.js, npm, Docker
 
-To install from a specific GitHub tag:
+## ตรวจ X11, xrandr, xinput
+
+ดู output จอและ input device:
 
 ```bash
-curl -fsSL https://example.com/vending-auto-setup/install.sh | sudo VENDING_AUTO_SETUP_VERSION=v0.1.0 bash
+PYTHONPATH=src python3 -m vending_auto_setup display status --display :0
 ```
 
-To pass installer arguments:
+คำสั่งนี้จะรัน:
 
 ```bash
-curl -fsSL https://example.com/vending-auto-setup/install.sh | sudo VENDING_AUTO_SETUP_ARGS="install --node-major 22" bash
+xrandr --query
+xinput list
 ```
 
-If the tool is not published yet, copy or download the project archive and run:
+ถ้ารันจาก user ที่ login อยู่ใน GUI ปกติ `--display :0` มักจะพอ แต่ถ้ารันจาก SSH หรือ root อาจต้องใช้ `XAUTHORITY` เพิ่ม ซึ่งจะทำเป็น flow แยกในอนาคต
 
-```bash
-sudo PYTHONPATH=src python3 -m vending_auto_setup install
-```
+## จำลอง touchscreen ใน VirtualBox
 
-Local POC without publishing:
+ถ้าไม่มีจอสัมผัสจริง สามารถสร้าง virtual touchscreen ใน Ubuntu guest ด้วย `uinput`
 
-```bash
-PYTHONPATH=src python3 -m vending_auto_setup about-os
-```
-
-## Virtual Touchscreen POC
-
-If no real touchscreen is available, use Linux `uinput` inside the Ubuntu VM to create a virtual touchscreen for X11/xinput mapping tests.
-
-Install the optional dependency:
+ติดตั้ง dependency:
 
 ```bash
 sudo apt update
 sudo apt install -y python3-evdev
 ```
 
-Create a virtual touchscreen and keep it alive:
+เปิด virtual touchscreen ค้างไว้:
 
 ```bash
 sudo python3 scripts/dev/virtual_touchscreen.py --width 1920 --height 1080
 ```
 
-In another terminal, verify that X11 sees the device:
+เปิดอีก terminal แล้วเช็ก:
 
 ```bash
 xinput list
 ```
 
-Emit one test tap:
+ควรเห็น:
 
-```bash
-sudo python3 scripts/dev/virtual_touchscreen.py --tap 960 540
+```text
+Vending Virtual Touchscreen
 ```
 
-This does not attach a fake USB device through VirtualBox. It creates a virtual Linux input device inside the guest OS, which is enough for testing `xinput` detection and mapping logic.
-
-## Display And Touchscreen Commands
-
-Show X11 display outputs and input devices:
+ดู properties:
 
 ```bash
-PYTHONPATH=src python3 -m vending_auto_setup display status --display :0
+xinput list-props "Vending Virtual Touchscreen"
 ```
 
-Apply display rotation and touchscreen coordinate mapping for the current session:
+หรือถ้ารู้ id เช่น `13`:
+
+```bash
+xinput list-props 13
+```
+
+## หมุนจอและ map touchscreen แบบ runtime
+
+คำสั่งนี้มีผลทันทีใน session ปัจจุบัน:
 
 ```bash
 PYTHONPATH=src python3 -m vending_auto_setup display apply \
@@ -148,7 +179,42 @@ PYTHONPATH=src python3 -m vending_auto_setup display apply \
   --rotate left
 ```
 
-Persist touchscreen coordinate mapping through Xorg:
+สิ่งที่คำสั่งนี้ทำ:
+
+```bash
+xrandr --output Virtual1 --rotate left
+xinput set-prop "Vending Virtual Touchscreen" "Coordinate Transformation Matrix" 0 -1 1 1 0 0 0 0 1
+```
+
+กลับจอเป็นปกติ:
+
+```bash
+PYTHONPATH=src python3 -m vending_auto_setup display apply \
+  --display :0 \
+  --output Virtual1 \
+  --touch "Vending Virtual Touchscreen" \
+  --rotate normal
+```
+
+ค่าที่ใช้ได้:
+
+- `normal`
+- `left`
+- `right`
+- `inverted`
+
+Matrix ที่ใช้:
+
+```text
+normal   1 0 0 0 1 0 0 0 1
+right    0 1 0 -1 0 1 0 0 1
+left     0 -1 1 1 0 0 0 0 1
+inverted -1 0 1 0 -1 1 0 0 1
+```
+
+## Persist touchscreen ผ่าน Xorg
+
+คำสั่งนี้เขียน config ของ touchscreen matrix ลง Xorg:
 
 ```bash
 sudo PYTHONPATH=src python3 -m vending_auto_setup display persist-xorg \
@@ -156,23 +222,195 @@ sudo PYTHONPATH=src python3 -m vending_auto_setup display persist-xorg \
   --rotate left
 ```
 
-Supported rotation values are `normal`, `left`, `right`, and `inverted`.
+ไฟล์ที่ถูกสร้าง:
 
-Future persistent Xorg touchscreen config should include the vending signature so `vending-status` can detect it:
+```text
+/etc/X11/xorg.conf.d/99-vending-touchscreen.conf
+```
+
+ตัวอย่างเนื้อหา:
 
 ```conf
 # vending-auto-config: touchscreen-xorg
+# Managed by vending-auto-setup. Manual edits may be overwritten.
 Section "InputClass"
     Identifier "vending-touchscreen-calibration"
     MatchProduct "Vending Virtual Touchscreen"
-    Option "CalibrationMatrix" "1 0 0 0 1 0 0 0 1"
+    Option "CalibrationMatrix" "0 -1 1 1 0 0 0 0 1"
 EndSection
+```
+
+เหตุผลที่ใช้ Xorg config:
+
+- Xorg จะ match device จาก `MatchProduct`
+- เหมาะกับกรณี cold boot ที่ touchscreen device อาจโหลดช้ากว่า session
+- เป็น config หลักของ touchscreen matrix
+
+ข้อจำกัด:
+
+- ไฟล์นี้ไม่ได้หมุนจอ
+- การหมุนจอต้องใช้ `xrandr` ซึ่งต้องทำใน X session
+
+## Persist display rotation ผ่าน session script
+
+คำสั่งนี้เขียน config ให้ user session เรียก script ตอน login:
+
+```bash
+PYTHONPATH=src python3 -m vending_auto_setup display persist-session \
+  --display :0 \
+  --output Virtual1 \
+  --touch "Vending Virtual Touchscreen" \
+  --rotate left
+```
+
+ห้ามใช้ `sudo` กับคำสั่งนี้ เพราะต้องเขียนไฟล์ของ user ที่ login GUI อยู่ ไม่ใช่ `/root`
+
+สิ่งที่ถูกสร้าง:
+
+```text
+~/.xprofile
+~/.config/vending-auto-setup/display-session.sh
+```
+
+หน้าที่ของ `~/.xprofile`:
+
+```text
+เป็นจุดเริ่มตอน login เข้า X session
+เรียก display-session.sh แบบ background
+```
+
+หน้าที่ของ `display-session.sh`:
+
+```text
+รอให้จอ output เช่น Virtual1 พร้อม
+ถ้ายังไม่พร้อมจะ retry
+เมื่อพร้อมแล้วรัน xrandr เพื่อหมุนจอ
+รอให้ touchscreen พร้อม
+ถ้ายังไม่พร้อมจะ retry
+เมื่อพร้อมแล้วรัน xinput set-prop เพื่อ map coordinate
+```
+
+เหตุผลที่ไม่เขียน `xrandr` ตรง ๆ ใน `.xprofile`:
+
+- ถ้า boot ช้า คำสั่งอาจรันก่อนจอหรือ touchscreen พร้อม
+- ถ้าพลาดจะไม่ลองใหม่
+- แยกเป็น script แล้ว debug ง่ายกว่า
+- เพิ่ม retry/log ได้ในอนาคต
+
+## Flow ที่แนะนำสำหรับเครื่องจริง
+
+1. ตรวจว่าเป็น X11:
+
+```bash
+PYTHONPATH=src python3 -m vending_auto_setup check
+```
+
+2. ดูชื่อจอและ touchscreen:
+
+```bash
+PYTHONPATH=src python3 -m vending_auto_setup display status --display :0
+```
+
+3. ลอง apply runtime ก่อน:
+
+```bash
+PYTHONPATH=src python3 -m vending_auto_setup display apply \
+  --display :0 \
+  --output Virtual1 \
+  --touch "Vending Virtual Touchscreen" \
+  --rotate left
+```
+
+4. ถ้าถูกต้องแล้ว persist Xorg:
+
+```bash
+sudo PYTHONPATH=src python3 -m vending_auto_setup display persist-xorg \
+  --touch "Vending Virtual Touchscreen" \
+  --rotate left
+```
+
+5. Persist session script:
+
+```bash
+PYTHONPATH=src python3 -m vending_auto_setup display persist-session \
+  --display :0 \
+  --output Virtual1 \
+  --touch "Vending Virtual Touchscreen" \
+  --rotate left
+```
+
+6. ตรวจสถานะ:
+
+```bash
+PYTHONPATH=src python3 -m vending_auto_setup check
+```
+
+7. Reboot เพื่อทดสอบ cold boot:
+
+```bash
+sudo reboot
+```
+
+หลัง login กลับมา จอควรถูกหมุน และ touchscreen ควรถูก map ตามค่าที่ตั้งไว้
+
+## Troubleshooting
+
+ถ้า Terminal เปิดไม่ได้ใน VirtualBox:
+
+```text
+อาจเกิดจาก locale ไม่เป็น UTF-8
+```
+
+แก้ `/etc/default/locale` ให้มี:
+
+```text
+LANG=en_US.UTF-8
+LANGUAGE=en_US:en
+LC_ALL=en_US.UTF-8
+```
+
+แล้วรัน:
+
+```bash
+sudo locale-gen --purge
+sudo reboot
+```
+
+ถ้า `xinput` ไม่เห็น touchscreen:
+
+```bash
+xinput list
+```
+
+ตรวจว่า script จำลอง touchscreen ยังรันค้างอยู่หรือไม่:
+
+```bash
+sudo python3 scripts/dev/virtual_touchscreen.py --width 1920 --height 1080
+```
+
+ถ้า `xrandr` ไม่เจอ output:
+
+```bash
+xrandr --query
+```
+
+ใช้ชื่อ output ที่ขึ้นว่า `connected` เช่น `Virtual1`, `HDMI-1`, `DP-1`
+
+ถ้า Docker รันโดยไม่ใช้ sudo ไม่ได้:
+
+```bash
+sudo usermod -aG docker $USER
+sudo reboot
 ```
 
 ## Configuration
 
-Default target versions live in `src/vending_auto_setup/config.py`.
+ค่า default อยู่ใน:
 
-- `NODE_MAJOR` controls NodeSource major version, currently `22`.
-- Docker installs the current package versions available from Docker's apt repository unless `--docker-version` is provided.
-- Git installs the current package available from Ubuntu's apt repository unless `GIT_VERSION` is set.
+```text
+src/vending_auto_setup/config.py
+```
+
+- `node_major` ค่า default คือ `22`
+- Docker ใช้ package ล่าสุดจาก Docker official apt repository ถ้าไม่ระบุ `--docker-version`
+- Git ใช้ package จาก Ubuntu apt repository ถ้าไม่ระบุ `--git-version`
