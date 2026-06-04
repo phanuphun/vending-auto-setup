@@ -58,21 +58,23 @@ def collect_display_session_status() -> DisplaySessionStatus:
 
 def print_status() -> None:
     print("Vending Auto Setup Status")
-    for status in collect_status():
-        marker = "OK" if status.installed else "MISSING"
-        detail = status.version if status.version is not None else "not installed"
-        print(f"{marker:7} {status.name:7} {detail}")
+    print()
     _print_display_session_status(collect_display_session_status())
+    print()
+    print("[Core Tools]")
+    for status in collect_status():
+        _print_tool_status(status)
 
 
 def main() -> int:
     statuses = collect_status()
     print("Vending Auto Setup Status")
-    for status in statuses:
-        marker = "OK" if status.installed else "MISSING"
-        detail = status.version if status.version is not None else "not installed"
-        print(f"{marker:7} {status.name:7} {detail}")
+    print()
     _print_display_session_status(collect_display_session_status())
+    print()
+    print("[Core Tools]")
+    for status in statuses:
+        _print_tool_status(status)
 
     return 0 if all(status.installed for status in statuses) else 1
 
@@ -122,6 +124,13 @@ def _read_loginctl_session_type() -> str | None:
 
 
 def _print_display_session_status(status: DisplaySessionStatus) -> None:
+    print("[Session]")
     marker = "OK" if status.is_x11 else "WARN"
     detail = f"{status.session_type} ({status.source})"
-    print(f"{marker:7} {'Session':7} {detail}")
+    print(f"{marker:7} {'Display':10} {detail}")
+
+
+def _print_tool_status(status: ToolStatus) -> None:
+    marker = "OK" if status.installed else "MISSING"
+    detail = status.version if status.version is not None else "not installed"
+    print(f"{marker:7} {status.name:10} {detail}")
