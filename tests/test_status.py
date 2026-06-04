@@ -1,15 +1,19 @@
+from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
 from status import (
     DISPLAY_SESSION_SCRIPT_SIGNATURE,
     DISPLAY_SESSION_SIGNATURE,
+    VpnStatus,
     XORG_TOUCHSCREEN_SIGNATURE,
+    collect_vpn_status,
     collect_display_session_status,
     collect_display_session_config_status,
     collect_display_session_script_status,
     collect_xorg_touchscreen_config_status,
     main,
+    print_status,
 )
 
 
@@ -101,3 +105,59 @@ def test_display_session_script_status_is_ok_when_signature_exists_and_executabl
     assert status.exists is True
     assert status.has_signature is True
     assert status.executable is True
+
+
+def test_vpn_status_collects_config_paths_and_connection_state(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    store_dir = tmp_path / "store"
+    active_dir = tmp_path / "etc-wireguard"
+    app_config = store_dir / "configs" / "wg0.conf"
+    active_config = active_dir / "wg0.conf"
+    history_dir = store_dir / "history" / "wg0"
+    app_config.parent.mkdir(parents=True)
+    active_config.parent.mkdir(parents=True)
+    history_dir.mkdir(parents=True)
+    app_config.write_text("[Interface]\n", encoding="utf-8")
+    active_config.write_text("[Interface]\n", encoding="utf-8")
+
+    with patch("status.default_store_dir", return_value=store_dir):
+        with patch("status.WIREGUARD_CONFIG_DIR", active_dir):
+            with patch("status.shutil.which", return_value="/usr/bin/wg"):
+                with patch("status._read_version", return_value="wireguard-tools v1.0.0"):
+                    with patch("status._read_command_first_line", side_effect=("enabled", "active")):
+                        with patch("status._command_succeeds", return_value=True):
+                            with patch("status._count_handshake_peers", return_value=1):
+                                status = collect_vpn_status("wg0")
+
+    assert status.app_config_exists is True
+    assert status.active_config_exists is True
+    assert status.history_exists is True
+    assert status.service_enabled == "enabled"
+    assert status.service_active == "active"
+    assert status.interface_exists is True
+    assert status.handshake_peers == 1
+
+
+def test_print_status_includes_vpn_section(capsys: Any) -> None:
+    with patch("status.collect_status", return_value=()):
+        with patch("status.collect_vpn_status") as collect_vpn:
+            collect_vpn.return_value = VpnStatus(
+                interface_name="wg0",
+                wg_installed=True,
+                wg_version="wireguard-tools v1.0.0",
+                app_config_path=Path("/home/first/.config/vending-auto-setup/wireguard/configs/wg0.conf"),
+                app_config_exists=True,
+                active_config_path=Path("/etc/wireguard/wg0.conf"),
+                active_config_exists=True,
+                history_dir=Path("/home/first/.config/vending-auto-setup/wireguard/history/wg0"),
+                history_exists=True,
+                service_enabled="enabled",
+                service_active="active",
+                interface_exists=True,
+                handshake_peers=1,
+            )
+            print_status()
+
+    output = capsys.readouterr().out
+    assert "[VPN]" in output
+    assert "App Config" in output
+    assert "Connection" in output

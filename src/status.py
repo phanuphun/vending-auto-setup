@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
+from wireguard import WIREGUARD_CONFIG_DIR, default_store_dir, service_name
+
 
 @dataclass(frozen=True)
 class ToolStatus:
@@ -46,6 +48,23 @@ class DisplaySessionScriptStatus:
     executable: bool
 
 
+@dataclass(frozen=True)
+class VpnStatus:
+    interface_name: str
+    wg_installed: bool
+    wg_version: str | None
+    app_config_path: Path
+    app_config_exists: bool
+    active_config_path: Path
+    active_config_exists: bool
+    history_dir: Path
+    history_exists: bool
+    service_enabled: str
+    service_active: str
+    interface_exists: bool
+    handshake_peers: int | None
+
+
 XORG_TOUCHSCREEN_CONFIG_PATH = Path("/etc/X11/xorg.conf.d/99-vending-touchscreen.conf")
 XORG_TOUCHSCREEN_SIGNATURE = "# vending-auto-config: touchscreen-xorg"
 DISPLAY_SESSION_CONFIG_PATH = Path.home() / ".xprofile"
@@ -63,6 +82,31 @@ TOOLS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
 
 def collect_status() -> tuple[ToolStatus, ...]:
     return tuple(_check_tool(name, command, version_args) for name, command, version_args in TOOLS)
+
+
+def collect_vpn_status(interface_name: str = "wg0") -> VpnStatus:
+    store_dir = default_store_dir()
+    app_config_path = store_dir / "configs" / f"{interface_name}.conf"
+    active_config_path = WIREGUARD_CONFIG_DIR / f"{interface_name}.conf"
+    history_dir = store_dir / "history" / interface_name
+    wg_path = shutil.which("wg")
+    service = service_name(interface_name)
+
+    return VpnStatus(
+        interface_name=interface_name,
+        wg_installed=wg_path is not None,
+        wg_version=_read_version((wg_path, "--version")) if wg_path is not None else None,
+        app_config_path=app_config_path,
+        app_config_exists=app_config_path.exists(),
+        active_config_path=active_config_path,
+        active_config_exists=active_config_path.exists(),
+        history_dir=history_dir,
+        history_exists=history_dir.exists(),
+        service_enabled=_read_command_first_line(("systemctl", "is-enabled", service)),
+        service_active=_read_command_first_line(("systemctl", "is-active", service)),
+        interface_exists=_command_succeeds(("wg", "show", interface_name)),
+        handshake_peers=_count_handshake_peers(interface_name) if wg_path is not None else None,
+    )
 
 
 def collect_display_session_status() -> DisplaySessionStatus:
@@ -159,6 +203,8 @@ def print_status() -> None:
     print("[Core Tools]")
     for status in collect_status():
         _print_tool_status(status)
+    print()
+    _print_vpn_status(collect_vpn_status())
 
 
 def main() -> int:
@@ -175,6 +221,8 @@ def main() -> int:
     print("[Core Tools]")
     for status in statuses:
         _print_tool_status(status)
+    print()
+    _print_vpn_status(collect_vpn_status())
 
     return 0 if all(status.installed for status in statuses) else 1
 
@@ -189,16 +237,50 @@ def _check_tool(name: str, command: str, version_args: Sequence[str]) -> ToolSta
 
 
 def _read_version(args: Sequence[str]) -> str | None:
-    completed = subprocess.run(
-        tuple(args),
-        check=False,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
+    completed = _run_command(args)
+    if completed is None:
+        return None
     if completed.returncode != 0:
         return _first_output_line(completed.stderr)
     return _first_output_line(completed.stdout) or _first_output_line(completed.stderr)
+
+
+def _read_command_first_line(args: Sequence[str]) -> str:
+    completed = _run_command(args)
+    if completed is None:
+        return "unknown"
+    return _first_output_line(completed.stdout) or _first_output_line(completed.stderr) or "unknown"
+
+
+def _command_succeeds(args: Sequence[str]) -> bool:
+    completed = _run_command(args)
+    return completed is not None and completed.returncode == 0
+
+
+def _count_handshake_peers(interface_name: str) -> int | None:
+    completed = _run_command(("wg", "show", interface_name, "latest-handshakes"))
+    if completed is None or completed.returncode != 0:
+        return None
+
+    peer_count = 0
+    for line in completed.stdout.splitlines():
+        parts = line.split()
+        if len(parts) >= 2 and parts[1].isdigit() and int(parts[1]) > 0:
+            peer_count += 1
+    return peer_count
+
+
+def _run_command(args: Sequence[str]) -> subprocess.CompletedProcess[str] | None:
+    try:
+        return subprocess.run(
+            tuple(args),
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    except OSError:
+        return None
 
 
 def _first_output_line(output: str) -> str | None:
@@ -211,13 +293,9 @@ def _read_loginctl_session_type() -> str | None:
     if not session_id:
         return None
 
-    completed = subprocess.run(
-        ("loginctl", "show-session", session_id, "-p", "Type", "--value"),
-        check=False,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
+    completed = _run_command(("loginctl", "show-session", session_id, "-p", "Type", "--value"))
+    if completed is None:
+        return None
     if completed.returncode != 0:
         return None
     return _first_output_line(completed.stdout)
@@ -281,3 +359,36 @@ def _print_display_session_script_status(status: DisplaySessionScriptStatus) -> 
         marker = "WARN"
         detail = f"not configured ({script_path})"
     print(f"{marker:7} {'Script':10} {detail}")
+
+
+def _print_vpn_status(status: VpnStatus) -> None:
+    print("[VPN]")
+    if status.wg_installed:
+        version = status.wg_version or "installed"
+        print(f"{'OK':7} {'WireGuard':10} {version}")
+    else:
+        print(f"{'MISSING':7} {'WireGuard':10} not installed")
+
+    _print_path_status("App Config", status.app_config_exists, status.app_config_path, "saved", "not saved")
+    _print_path_status("Active", status.active_config_exists, status.active_config_path, "applied", "not applied")
+    _print_path_status("History", status.history_exists, status.history_dir, "available", "not found")
+
+    enabled_marker = "OK" if status.service_enabled == "enabled" else "WARN"
+    active_marker = "OK" if status.service_active == "active" else "WARN"
+    interface_marker = "OK" if status.interface_exists else "WARN"
+    print(f"{enabled_marker:7} {'Service':10} {service_name(status.interface_name)} enabled={status.service_enabled}")
+    print(f"{active_marker:7} {'Connection':10} service {status.service_active}")
+    print(f"{interface_marker:7} {'Interface':10} {status.interface_name} {'visible' if status.interface_exists else 'not visible'}")
+
+    if status.handshake_peers is None:
+        print(f"{'WARN':7} {'Handshake':10} unable to inspect peers")
+    elif status.handshake_peers > 0:
+        print(f"{'OK':7} {'Handshake':10} latest handshake from {status.handshake_peers} peer(s)")
+    else:
+        print(f"{'WARN':7} {'Handshake':10} no peer handshake detected")
+
+
+def _print_path_status(label: str, exists: bool, path: Path, ok_text: str, missing_text: str) -> None:
+    marker = "OK" if exists else "WARN"
+    status_text = ok_text if exists else missing_text
+    print(f"{marker:7} {label:10} {status_text} ({path.as_posix()})")
