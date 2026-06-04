@@ -53,6 +53,7 @@ install_bootstrap_packages() {
   missing_packages=()
   command -v python3 >/dev/null 2>&1 || missing_packages+=("python3")
   command -v tar >/dev/null 2>&1 || missing_packages+=("tar")
+  python3 -c "import flask" >/dev/null 2>&1 || missing_packages+=("python3-flask")
   if ! command -v curl >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1; then
     missing_packages+=("wget" "ca-certificates")
   fi

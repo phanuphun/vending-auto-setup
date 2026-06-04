@@ -52,6 +52,13 @@ def build_parser() -> argparse.ArgumentParser:
     update.add_argument("--install-dir", type=Path, default=DEFAULT_INSTALL_DIR, help=argparse.SUPPRESS)
     update.add_argument("--bin-dir", type=Path, default=Path("/usr/local/bin"), help=argparse.SUPPRESS)
 
+    server = subcommands.add_parser("server", help="Start the local Flask HTTP dashboard.")
+    server_subcommands = server.add_subparsers(dest="server_command", required=True)
+    server_start = server_subcommands.add_parser("start", help="Start the Flask dashboard server.")
+    server_start.add_argument("--host", default="127.0.0.1")
+    server_start.add_argument("--port", type=int, default=8080)
+    server_start.add_argument("--debug", action="store_true")
+
     display = subcommands.add_parser("display", help="Inspect and configure X11 display/touchscreen settings.")
     display_subcommands = display.add_subparsers(dest="display_command", required=True)
 
@@ -202,6 +209,18 @@ def main(argv: list[str] | None = None) -> int:
             bin_dir=args.bin_dir,
         ).update()
         return 0
+
+    if args.command == "server":
+        if args.server_command == "start":
+            url = f"http://{args.host}:{args.port}"
+            if args.dry_run:
+                print(f"start Flask server {url}")
+                return 0
+            from server import run_server
+
+            print(f"Starting vending-auto-setup dashboard at {url}")
+            run_server(host=args.host, port=args.port, debug=args.debug)
+            return 0
 
     if args.command == "install":
         if not args.dry_run:

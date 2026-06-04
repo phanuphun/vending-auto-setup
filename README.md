@@ -154,6 +154,22 @@ sudo vas update
 
 `update` จะดาวน์โหลด source ล่าสุดจาก GitHub แล้วแทนที่ `/opt/vending-auto-setup` พร้อมเขียน wrapper ใน `/usr/local/bin` ใหม่ โดยไม่ต้องใช้ `pip`
 
+## Local HTTP dashboard
+
+Start a local Flask dashboard for status review and command preview:
+
+```bash
+vas server start
+```
+
+Expose the dashboard to the LAN:
+
+```bash
+vas server start --host 0.0.0.0 --port 8080
+```
+
+The web UI is preview-only. It shows the exact `vas` commands for install, reset, and WireGuard workflows, but it does not execute root commands from the browser.
+
 ## ตรวจสถานะเครื่อง
 
 คำสั่ง:

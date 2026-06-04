@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel">
+  <h2>{{ title }}</h2>
+  <p class="muted">Commands are preview-only. Run them manually in a terminal on the vending machine.</p>
+  {% include "_command_list.html" %}
+</section>
+{% endblock %}

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% set title = "WireGuard" %}
+
+{% block content %}
+<section class="status-grid">
+  <article class="panel">
+    <h2>WireGuard Status</h2>
+    <dl>
+      <dt>Tool</dt>
+      <dd><span class="badge {{ 'ok' if vpn.wg_installed else 'missing' }}">{{ 'OK' if vpn.wg_installed else 'MISSING' }}</span>{{ vpn.wg_version or "not installed" }}</dd>
+      <dt>App config</dt>
+      <dd>{{ vpn.app_config_path.as_posix() }}</dd>
+      <dt>Active config</dt>
+      <dd>{{ vpn.active_config_path.as_posix() }}</dd>
+      <dt>History</dt>
+      <dd>{{ vpn.history_dir.as_posix() }}</dd>
+      <dt>Service</dt>
+      <dd>{{ vpn.service_enabled }} / {{ vpn.service_active }}</dd>
+      <dt>Connection</dt>
+      <dd>{{ vpn_connection_label(vpn) }}</dd>
+    </dl>
+  </article>
+  <article class="panel">
+    <h2>WireGuard Commands</h2>
+    {% include "_command_list.html" %}
+  </article>
+</section>
+{% endblock %}

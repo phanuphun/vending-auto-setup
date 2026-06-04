@@ -52,6 +52,14 @@ def test_update_dry_run_prints_download_and_wrappers(capsys: Any, tmp_path: Path
     assert "vending-status" in output
 
 
+def test_server_start_dry_run_prints_url(capsys: Any) -> None:
+    exit_code = main(["--dry-run", "server", "start", "--host", "0.0.0.0", "--port", "9090"])
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert "start Flask server http://0.0.0.0:9090" in output
+
+
 def test_install_dry_run_uses_requested_versions(capsys: Any) -> None:
     exit_code = main(
         [

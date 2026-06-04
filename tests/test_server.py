@@ -1,0 +1,85 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+from unittest.mock import patch
+
+from server import build_install_commands, build_reset_commands, build_wireguard_commands, create_app
+from status import (
+    DisplaySessionConfigStatus,
+    DisplaySessionScriptStatus,
+    DisplaySessionStatus,
+    ToolStatus,
+    VpnStatus,
+    XorgTouchscreenConfigStatus,
+)
+
+
+def test_command_previews_are_allowlisted_vas_commands() -> None:
+    install_commands = build_install_commands()
+    reset_commands = build_reset_commands()
+    wireguard_commands = build_wireguard_commands()
+
+    assert any(command.command == "sudo vas install --component all" for command in install_commands)
+    assert any(command.command == "sudo vas reset --component docker" for command in reset_commands)
+    assert any(command.command == "sudo vas wireguard sync --name wg0" for command in wireguard_commands)
+    assert all(";" not in command.command for command in (*install_commands, *reset_commands, *wireguard_commands))
+
+
+def test_dashboard_route_renders_status_and_command_preview() -> None:
+    app = create_app()
+
+    with _patched_status_collectors():
+        response = app.test_client().get("/")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "Core Tools" in body
+    assert "VPN" in body
+    assert "sudo vas install --component all" in body
+    assert "sudo vas wireguard sync --name wg0" in body
+
+
+def test_health_route_returns_ok() -> None:
+    response = create_app().test_client().get("/health")
+
+    assert response.status_code == 200
+    assert response.json == {"status": "ok"}
+
+
+def _patched_status_collectors() -> Any:
+    return patch.multiple(
+        "server",
+        collect_status=lambda: (
+            ToolStatus("Git", "git", True, "git version 2.34.1", "/usr/bin/git"),
+            ToolStatus("Docker", "docker", True, "Docker version 29.5.3", "/usr/bin/docker"),
+        ),
+        collect_display_session_status=lambda: DisplaySessionStatus("x11", True, "XDG_SESSION_TYPE"),
+        collect_display_session_config_status=lambda: DisplaySessionConfigStatus(Path("/home/first/.xprofile"), True, True),
+        collect_display_session_script_status=lambda: DisplaySessionScriptStatus(
+            Path("/home/first/.config/vending-auto-setup/display-session.sh"),
+            True,
+            True,
+            True,
+        ),
+        collect_xorg_touchscreen_config_status=lambda: XorgTouchscreenConfigStatus(
+            Path("/etc/X11/xorg.conf.d/99-vending-touchscreen.conf"),
+            True,
+            True,
+        ),
+        collect_vpn_status=lambda: VpnStatus(
+            interface_name="wg0",
+            wg_installed=True,
+            wg_version="wireguard-tools v1.0.0",
+            app_config_path=Path("/home/first/.config/vending-auto-setup/wireguard/configs/wg0.conf"),
+            app_config_exists=True,
+            active_config_path=Path("/etc/wireguard/wg0.conf"),
+            active_config_exists=True,
+            history_dir=Path("/home/first/.config/vending-auto-setup/wireguard/history/wg0"),
+            history_exists=True,
+            service_enabled="enabled",
+            service_active="active",
+            interface_exists=True,
+            handshake_peers=1,
+        ),
+    )

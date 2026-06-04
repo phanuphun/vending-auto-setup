@@ -9,7 +9,9 @@ description = "Typed Python CLI for preparing Ubuntu vending machines."
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "Vending Auto Setup" }]
-dependencies = []
+dependencies = [
+    "flask>=3.0",
+]
 
 [project.optional-dependencies]
 dev = [
