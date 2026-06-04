@@ -34,7 +34,29 @@ Phase 3 WireGuard ที่เริ่มทำแล้ว:
 
 ## Bootstrap บน Ubuntu ใหม่โดยไม่ต้องมี Git
 
-เครื่อง Ubuntu ใหม่อาจยังไม่มี Git ดังนั้น flow แรกให้ใช้ `wget` ดาวน์โหลด source archive จาก GitHub แล้วสั่ง CLI เอง
+เครื่อง Ubuntu ใหม่อาจยังไม่มี Git ดังนั้น flow แรกใช้ `wget` ดาวน์โหลด bootstrap script จาก GitHub ได้เลย
+
+ติดตั้ง CLI wrapper ลง `/usr/local/bin` และติดตั้งทุก component:
+
+```bash
+wget -qO- https://raw.githubusercontent.com/phanuphun/vending-auto-setup/main/scripts/install.sh | sudo bash -s -- --install-cli install --component all
+```
+
+หลังจากคำสั่งนี้จบ จะใช้คำสั่งเหล่านี้ได้:
+
+```bash
+vending-auto-setup check
+sudo vending-auto-setup install --component all
+sudo vending-auto-setup reset --component all
+```
+
+ถ้าต้องการติดตั้ง CLI wrapper อย่างเดียว แต่ยังไม่ติดตั้ง package:
+
+```bash
+wget -qO- https://raw.githubusercontent.com/phanuphun/vending-auto-setup/main/scripts/install.sh | sudo bash -s -- --install-cli check
+```
+
+ถ้าต้องการโหลด source มาเก็บไว้เอง:
 
 ```bash
 sudo apt update
@@ -68,7 +90,7 @@ sudo PYTHONPATH=src python3 -m cli install --component all
 
 แนะนำให้ snapshot VM ก่อนรัน install จริง เพราะคำสั่งนี้จะแก้ apt repository และติดตั้ง package ลงเครื่อง
 
-ถ้าต้องการใช้ bootstrap script ชั่วคราวแบบไม่เก็บ source ไว้ในเครื่อง คำสั่ง default จะเป็น `check` เท่านั้น ไม่ได้ติดตั้งจริง:
+ถ้าต้องการใช้ bootstrap script ชั่วคราวแบบไม่ติดตั้ง CLI wrapper คำสั่ง default จะเป็น `check` เท่านั้น ไม่ได้ติดตั้งจริง:
 
 ```bash
 wget -qO- https://raw.githubusercontent.com/phanuphun/vending-auto-setup/main/scripts/install.sh | bash

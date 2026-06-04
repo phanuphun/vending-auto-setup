@@ -38,6 +38,7 @@ Phase 2 ส่วน display/touchscreen เริ่มทำแล้ว:
 - reset component ที่เลือกโดยถอน package/service และลบ config ที่โปรแกรมสร้าง
 - reset Docker โดยไม่ลบ `/var/lib/docker`
 - install preflight เช็กเวลาเครื่องกับ Ubuntu archive server และพยายามแก้ drift ก่อน `apt-get update`
+- bootstrap script รองรับ `--install-cli` เพื่อติดตั้ง wrapper ลง `/usr/local/bin` โดยไม่ต้องใช้ `pip`
 
 คำสั่งหลัก:
 
