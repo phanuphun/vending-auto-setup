@@ -9,6 +9,7 @@ from pytest import MonkeyPatch
 from display import TouchDevice, parse_xinput_device_map
 from server import (
     DisplayDevices,
+    build_display_commands,
     build_install_commands,
     build_reset_commands,
     build_server_commands,
@@ -45,6 +46,7 @@ Endpoint = vpn.example.com:51820
 def test_command_previews_are_allowlisted_vas_commands() -> None:
     install_commands = build_install_commands()
     reset_commands = build_reset_commands()
+    display_commands = build_display_commands()
     wireguard_commands = build_wireguard_commands()
     server_commands = build_server_commands()
 
@@ -52,9 +54,14 @@ def test_command_previews_are_allowlisted_vas_commands() -> None:
     assert any(command.command == "sudo vas install --component anydesk" for command in install_commands)
     assert any(command.command == "sudo vas reset --component docker" for command in reset_commands)
     assert any(command.command == "sudo vas reset --component anydesk" for command in reset_commands)
+    assert any(command.command == "vas display status --display :0" for command in display_commands)
+    assert any(command.command.startswith("sudo vas display persist-xorg") for command in display_commands)
     assert any(command.command == "sudo vas wireguard sync --name wg0" for command in wireguard_commands)
     assert any(command.command == "sudo vas server start --host 0.0.0.0 --port 8888" for command in server_commands)
-    assert all(";" not in command.command for command in (*install_commands, *reset_commands, *wireguard_commands, *server_commands))
+    assert all(
+        ";" not in command.command
+        for command in (*install_commands, *reset_commands, *display_commands, *wireguard_commands, *server_commands)
+    )
 
 
 def test_dashboard_route_renders_status_without_command_preview() -> None:
@@ -106,6 +113,7 @@ def test_command_docs_route_renders_command_sections() -> None:
     assert "Command Docs" in body
     assert "sudo vas install --component all" in body
     assert "sudo vas reset --component docker" in body
+    assert "vas display status --display :0" in body
     assert "sudo vas wireguard sync --name wg0" in body
     assert "sudo vas server start --host 0.0.0.0 --port 8888" in body
 

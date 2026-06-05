@@ -51,6 +51,22 @@ WIREGUARD_ACTIONS = (
     ("List history", "vas wireguard history --name wg0"),
     ("Unsync config", "sudo vas wireguard unsync --name wg0"),
 )
+DISPLAY_ACTIONS = (
+    ("Show display status", "vas display status --display :0"),
+    ("List touchscreens", "vas display list-touch --display :0"),
+    (
+        "Apply runtime",
+        "vas display apply --display :0 --output Virtual1 --touch 'Vending Virtual Touchscreen' --rotate normal",
+    ),
+    (
+        "Persist session",
+        "vas display persist-session --display :0 --output Virtual1 --touch 'Vending Virtual Touchscreen' --rotate normal",
+    ),
+    (
+        "Persist touch in Xorg",
+        "sudo vas display persist-xorg --touch 'Vending Virtual Touchscreen' --rotate normal",
+    ),
+)
 SERVER_ACTIONS = (
     ("Start background service", "sudo vas server start --host 0.0.0.0 --port 8888"),
     ("Show service status", "vas server status"),
@@ -245,6 +261,7 @@ def create_app() -> Flask:
             "command_docs.html",
             install_commands=build_install_commands(),
             reset_commands=build_reset_commands(),
+            display_commands=build_display_commands(),
             wireguard_commands=build_wireguard_commands(),
             server_commands=build_server_commands(),
         )
@@ -366,6 +383,13 @@ def build_wireguard_commands() -> tuple[CommandPreview, ...]:
     return tuple(
         CommandPreview(label=label, command=command, requires_root=command.startswith("sudo "))
         for label, command in WIREGUARD_ACTIONS
+    )
+
+
+def build_display_commands() -> tuple[CommandPreview, ...]:
+    return tuple(
+        CommandPreview(label=label, command=command, requires_root=command.startswith("sudo "))
+        for label, command in DISPLAY_ACTIONS
     )
 
 
