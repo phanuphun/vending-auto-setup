@@ -3,67 +3,50 @@
 
 {% block content %}
 <section class="display-tool" data-default-display="{{ default_display }}">
-  <div class="display-summary">
-    <article class="panel display-summary-card">
-      <h2>Display Status</h2>
+  <section class="status-grid display-detail">
+    <article class="panel">
+      <h2>Display Details</h2>
       <dl>
         <dt>Session</dt>
         <dd><span class="badge {{ 'ok' if session.is_x11 else 'warn' }}">{{ 'OK' if session.is_x11 else 'WARN' }}</span>{{ session.session_type }} via {{ session.source }}</dd>
         <dt>Monitors</dt>
-        <dd class="chip-list">
+        <dd>
           {% if outputs %}
             {% for output in outputs %}
-            <span class="soft-chip ok">{{ output }}</span>
+            {{ output }}{% if not loop.last %}, {% endif %}
             {% endfor %}
           {% else %}
-            <span class="soft-chip warn">none detected</span>
+            <span class="badge warn">WARN</span>none detected
           {% endif %}
         </dd>
         <dt>Touchscreens</dt>
-        <dd class="chip-list">
+        <dd>
           {% if touch_devices %}
             {% for t in touch_devices %}
-            <span class="soft-chip ok">{{ t.name }}{% if t.xinput_id is not none %} (id: {{ t.xinput_id }}){% endif %}</span>
+            {{ t.name }}{% if t.xinput_id is not none %} (id: {{ t.xinput_id }}){% endif %}{% if not loop.last %}, {% endif %}
             {% endfor %}
           {% else %}
-            <span class="soft-chip warn">none detected</span>
+            <span class="badge warn">WARN</span>none detected
           {% endif %}
+        </dd>
+        <dt>.xprofile</dt>
+        <dd class="detail-value">
+          <span><span class="badge {{ 'ok' if display_config.has_signature else 'warn' }}">{{ 'OK' if display_config.has_signature else 'WARN' }}</span>{{ display_config.path.as_posix() }}</span>
+          <button class="config-view-btn" data-config-key="xprofile" data-config-title=".xprofile" type="button">View</button>
+        </dd>
+        <dt>Session script</dt>
+        <dd class="detail-value">
+          <span><span class="badge {{ 'ok' if display_script.has_signature and display_script.executable else 'warn' }}">{{ 'OK' if display_script.has_signature and display_script.executable else 'WARN' }}</span>{{ display_script.path.as_posix() }}</span>
+          <button class="config-view-btn" data-config-key="display_script" data-config-title="display-session.sh" type="button">View</button>
+        </dd>
+        <dt>Xorg touchscreen</dt>
+        <dd class="detail-value">
+          <span><span class="badge {{ 'ok' if xorg_touchscreen.has_signature else 'warn' }}">{{ 'OK' if xorg_touchscreen.has_signature else 'WARN' }}</span>{{ xorg_touchscreen.path.as_posix() }}</span>
+          <button class="config-view-btn" data-config-key="xorg_touchscreen" data-config-title="Xorg touchscreen" type="button">View</button>
         </dd>
       </dl>
     </article>
-
-    <article class="panel display-summary-card">
-      <h2>Config Files</h2>
-      <div class="config-file-list">
-        <div class="config-file-item">
-          <div>
-            <strong>.xprofile</strong>
-            <p class="muted">{{ display_config.path.as_posix() }}</p>
-          </div>
-          <span class="badge {{ 'ok' if display_config.has_signature else 'warn' }}">{{ 'OK' if display_config.has_signature else 'WARN' }}</span>
-          <button class="config-view-btn" data-config-key="xprofile" type="button">View</button>
-        </div>
-
-        <div class="config-file-item">
-          <div>
-            <strong>display-session.sh</strong>
-            <p class="muted">{{ display_script.path.as_posix() }}</p>
-          </div>
-          <span class="badge {{ 'ok' if display_script.has_signature and display_script.executable else 'warn' }}">{{ 'OK' if display_script.has_signature and display_script.executable else 'WARN' }}</span>
-          <button class="config-view-btn" data-config-key="display_script" type="button">View</button>
-        </div>
-
-        <div class="config-file-item">
-          <div>
-            <strong>Xorg touchscreen</strong>
-            <p class="muted">{{ xorg_touchscreen.path.as_posix() }}</p>
-          </div>
-          <span class="badge {{ 'ok' if xorg_touchscreen.has_signature else 'warn' }}">{{ 'OK' if xorg_touchscreen.has_signature else 'WARN' }}</span>
-          <button class="config-view-btn" data-config-key="xorg_touchscreen" type="button">View</button>
-        </div>
-      </div>
-    </article>
-  </div>
+  </section>
 
   <div class="panel config-file-viewer" id="configFileViewer" hidden>
     <div class="config-file-header">
@@ -300,7 +283,7 @@ document.querySelectorAll(".config-view-btn").forEach((btn) => {
     const titleEl = document.getElementById("configFileTitle");
     const pathEl = document.getElementById("configFilePath");
     const contentEl = document.getElementById("configFileContent");
-    const title = btn.closest(".config-file-item").querySelector("strong").textContent;
+    const title = btn.dataset.configTitle;
 
     titleEl.textContent = title;
     pathEl.textContent = "Loading...";

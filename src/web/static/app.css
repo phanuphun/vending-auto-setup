@@ -178,67 +178,11 @@ code {
   gap: 16px;
 }
 
-.display-summary {
+.detail-value {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(360px, 1.2fr);
-  gap: 16px;
-}
-
-.display-summary-card {
-  min-width: 0;
-}
-
-.chip-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.soft-chip {
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-  max-width: 100%;
-  padding: 2px 8px;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-  overflow-wrap: anywhere;
-}
-
-.soft-chip.ok {
-  border-color: #bbf7d0;
-  background: #dcfce7;
-  color: #166534;
-}
-
-.soft-chip.warn {
-  border-color: #fde68a;
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.config-file-list {
-  display: grid;
-  gap: 8px;
-}
-
-.config-file-item {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
-  padding: 10px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: #fbfcfe;
-}
-
-.config-file-item .muted {
-  margin-top: 2px;
-  font-size: 12px;
-  overflow-wrap: anywhere;
 }
 
 .config-view-btn,
@@ -522,24 +466,6 @@ code {
 
   .display-layout {
     grid-template-columns: 1fr;
-  }
-
-  .display-summary {
-    grid-template-columns: 1fr;
-  }
-
-  .config-file-item {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .config-file-item .badge {
-    grid-column: 1;
-    justify-self: start;
-  }
-
-  .config-view-btn {
-    grid-column: 2;
-    grid-row: 1 / span 2;
   }
 
   .monitor-frame {
