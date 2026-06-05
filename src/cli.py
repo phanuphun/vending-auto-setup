@@ -74,6 +74,12 @@ def build_parser() -> argparse.ArgumentParser:
     display_status = display_subcommands.add_parser("status", help="Show xrandr and xinput status.")
     add_x_session_arguments(display_status)
 
+    display_list_touch = display_subcommands.add_parser(
+        "list-touch",
+        help="List touchscreen devices with xinput ID (detected via udevadm).",
+    )
+    add_x_session_arguments(display_list_touch)
+
     display_apply = display_subcommands.add_parser("apply", help="Apply display rotation and touchscreen mapping now.")
     add_x_session_arguments(display_apply)
     display_apply.add_argument("--output", required=True, help="xrandr output name, for example HDMI-1 or Virtual1.")
@@ -306,6 +312,10 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.display_command == "status":
             configurator.print_status(x_display=args.x_display, xauthority=args.xauthority)
+            return 0
+
+        if args.display_command == "list-touch":
+            configurator.print_touch_devices(x_display=args.x_display, xauthority=args.xauthority)
             return 0
 
         if args.display_command == "apply":

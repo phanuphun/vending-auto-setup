@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
+from display import TouchDevice, parse_xinput_device_map
 from server import (
     DisplayDevices,
     build_install_commands,
@@ -70,7 +71,8 @@ def test_health_route_returns_ok() -> None:
 def test_display_route_renders_monitor_controls() -> None:
     app = create_app()
 
-    with patch("server.collect_display_devices", return_value=DisplayDevices(("HDMI-1",), ("Vending Touchscreen",))):
+    mock_devices = DisplayDevices(("HDMI-1",), (TouchDevice("Vending Touchscreen", 13),))
+    with patch("server.collect_display_devices", return_value=mock_devices):
         response = app.test_client().get("/display")
 
     assert response.status_code == 200
@@ -78,6 +80,7 @@ def test_display_route_renders_monitor_controls() -> None:
     assert "Monitor Setting" in body
     assert "HDMI-1" in body
     assert "Vending Touchscreen" in body
+    assert "id: 13" in body
     assert "Command Preview" in body
 
 
@@ -96,13 +99,14 @@ def test_command_docs_route_renders_command_sections() -> None:
 def test_display_devices_api_uses_requested_x_display() -> None:
     app = create_app()
 
-    with patch("server.collect_display_devices", return_value=DisplayDevices(("HDMI-1",), ("Vending Touchscreen",))) as collect:
+    mock_devices = DisplayDevices(("HDMI-1",), (TouchDevice("Vending Touchscreen", 13),))
+    with patch("server.collect_display_devices", return_value=mock_devices) as collect:
         response = app.test_client().get("/api/display/devices?display=:1")
 
     assert response.status_code == 200
     assert response.json == {
         "outputs": ["HDMI-1"],
-        "touchDevices": ["Vending Touchscreen"],
+        "touchDevices": [{"name": "Vending Touchscreen", "id": 13}],
         "defaultDisplay": ":1",
     }
     collect.assert_called_once_with(x_display=":1")
@@ -126,8 +130,39 @@ def test_xinput_parser_does_not_fallback_to_mouse_or_keyboard() -> None:
     assert touches == ()
 
 
+def test_parse_xinput_device_map_extracts_name_and_id() -> None:
+    xinput_output = (
+        "\u2561 Virtual core pointer                          id=2    [master pointer  (3)]\n"
+        "\u255c   \u21b3 Virtual core XTEST pointer               id=4    [slave  pointer  (2)]\n"
+        "\u255c   \u21b3 Vending Virtual Touchscreen              id=13   [slave  pointer  (2)]\n"
+        "\u2563 Virtual core keyboard                         id=3    [master keyboard (2)]\n"
+        "    \u21b3 Virtual core XTEST keyboard              id=5    [slave  keyboard (3)]\n"
+    )
+    device_map = parse_xinput_device_map(xinput_output)
+
+    assert device_map["Vending Virtual Touchscreen"] == 13
+    assert device_map["Virtual core pointer"] == 2
+    assert device_map["Virtual core XTEST keyboard"] == 5
+
+
+def test_display_apply_validation_uses_touch_device_names() -> None:
+    devices = DisplayDevices(
+        outputs=("HDMI-1",),
+        touch_devices=(TouchDevice("Vending Touchscreen", 13),),
+    )
+
+    errors = validate_display_apply("HDMI-1", "Vending Touchscreen", "normal", devices)
+    assert not any("Touchscreen" in e for e in errors)
+
+    errors = validate_display_apply("HDMI-1", "Unknown Device", "normal", devices)
+    assert any("Touchscreen device is not available" in e for e in errors)
+
+
 def test_display_apply_validation_rejects_unknown_values() -> None:
-    devices = DisplayDevices(outputs=("HDMI-1",), touch_devices=("Vending Touchscreen",))
+    devices = DisplayDevices(
+        outputs=("HDMI-1",),
+        touch_devices=(TouchDevice("Vending Touchscreen", 13),),
+    )
 
     errors = validate_display_apply("DP-1", "Mouse", "sideways", devices)
 

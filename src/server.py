@@ -6,7 +6,13 @@ from pathlib import Path
 
 from flask import Flask, render_template, request
 
-from display import DisplayConfigurator, ROTATION_MATRICES
+from display import (
+    DisplayConfigurator,
+    ROTATION_MATRICES,
+    TouchDevice,
+    get_udevadm_touchscreen_names,
+    parse_xinput_device_map,
+)
 from runner import CommandExecutionError, CommandRunner
 from status import (
     ToolStatus,
@@ -118,7 +124,7 @@ def create_app() -> Flask:
         devices = collect_display_devices(x_display=x_display)
         return {
             "outputs": devices.outputs,
-            "touchDevices": devices.touch_devices,
+            "touchDevices": [{"name": d.name, "id": d.xinput_id} for d in devices.touch_devices],
             "defaultDisplay": x_display,
         }
 
@@ -211,7 +217,7 @@ def build_server_commands() -> tuple[CommandPreview, ...]:
 @dataclass(frozen=True)
 class DisplayDevices:
     outputs: tuple[str, ...]
-    touch_devices: tuple[str, ...]
+    touch_devices: tuple[TouchDevice, ...]
 
 
 def collect_display_devices(x_display: str | None = None) -> DisplayDevices:
@@ -219,24 +225,41 @@ def collect_display_devices(x_display: str | None = None) -> DisplayDevices:
     configurator = DisplayConfigurator(runner)
     resolved_display = x_display or _default_x_display()
     xauthority = _default_xauthority()
+
     xrandr = runner.run(configurator._with_x_env(["xrandr", "--query"], resolved_display, xauthority), check=False)
-    xinput = runner.run(configurator._with_x_env(["xinput", "list", "--name-only"], resolved_display, xauthority), check=False)
+    xinput = runner.run(configurator._with_x_env(["xinput", "list"], resolved_display, xauthority), check=False)
 
     outputs = parse_xrandr_outputs(xrandr.stdout)
-    touch_devices = parse_xinput_touch_devices(xinput.stdout)
-    if outputs and touch_devices:
-        return DisplayDevices(outputs=outputs, touch_devices=touch_devices)
+    xinput_map = parse_xinput_device_map(xinput.stdout)
 
-    desktop_user = _desktop_user()
-    if desktop_user:
-        env_args = ["env", f"DISPLAY={resolved_display}"]
-        if xauthority:
-            env_args.append(f"XAUTHORITY={xauthority}")
-        xrandr = runner.run(["runuser", "-u", desktop_user, "--", *env_args, "xrandr", "--query"], check=False)
-        xinput = runner.run(["runuser", "-u", desktop_user, "--", *env_args, "xinput", "list", "--name-only"], check=False)
-        outputs = parse_xrandr_outputs(xrandr.stdout)
-        touch_devices = parse_xinput_touch_devices(xinput.stdout)
+    if not outputs:
+        desktop_user = _desktop_user()
+        if desktop_user:
+            env_args = ["env", f"DISPLAY={resolved_display}"]
+            if xauthority:
+                env_args.append(f"XAUTHORITY={xauthority}")
+            xrandr = runner.run(["runuser", "-u", desktop_user, "--", *env_args, "xrandr", "--query"], check=False)
+            xinput = runner.run(["runuser", "-u", desktop_user, "--", *env_args, "xinput", "list"], check=False)
+            outputs = parse_xrandr_outputs(xrandr.stdout)
+            xinput_map = parse_xinput_device_map(xinput.stdout)
+
+    touch_devices = _resolve_touch_devices(runner, xinput_map)
     return DisplayDevices(outputs=outputs, touch_devices=touch_devices)
+
+
+def _resolve_touch_devices(runner: CommandRunner, xinput_map: dict[str, int]) -> tuple[TouchDevice, ...]:
+    """หา touchscreen devices โดยใช้ udevadm เป็นหลัก fallback ด้วย "touch" ใน name"""
+    udev_names = get_udevadm_touchscreen_names(runner)
+    if udev_names:
+        return tuple(
+            TouchDevice(name=name, xinput_id=xinput_map.get(name))
+            for name in sorted(udev_names)
+        )
+    return tuple(
+        TouchDevice(name=name, xinput_id=id_)
+        for name, id_ in sorted(xinput_map.items())
+        if "touch" in name.lower()
+    )
 
 
 def parse_xrandr_outputs(output: str) -> tuple[str, ...]:
@@ -249,6 +272,9 @@ def parse_xrandr_outputs(output: str) -> tuple[str, ...]:
 
 
 def parse_xinput_touch_devices(output: str) -> tuple[str, ...]:
+    """Legacy: กรอง touchscreen จาก xinput --name-only output ด้วย 'touch' ใน name
+    ใช้ parse_xinput_device_map + get_udevadm_touchscreen_names แทนใน production code
+    """
     names = tuple(line.strip() for line in output.splitlines() if line.strip())
     return tuple(name for name in names if "touch" in name.lower())
 
@@ -263,7 +289,7 @@ def validate_display_apply(output: str, touch: str, rotate: str, devices: Displa
         errors.append(f"Display output is not connected: {output}")
     if not touch:
         errors.append("Touchscreen device is required.")
-    elif touch not in devices.touch_devices:
+    elif touch not in (d.name for d in devices.touch_devices):
         errors.append(f"Touchscreen device is not available: {touch}")
     return errors
 
