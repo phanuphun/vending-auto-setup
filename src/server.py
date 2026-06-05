@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, render_template, request
 
 from display import DisplayConfigurator, ROTATION_MATRICES
 from runner import CommandExecutionError, CommandRunner
@@ -75,10 +76,6 @@ def create_app() -> Flask:
             remote=collect_remote_access_status(),
             vpn=collect_vpn_status(),
             web_server=collect_web_server_status(),
-            install_commands=build_install_commands(),
-            reset_commands=build_reset_commands(),
-            wireguard_commands=build_wireguard_commands(),
-            server_commands=build_server_commands(),
         )
 
     @app.get("/install")
@@ -91,26 +88,38 @@ def create_app() -> Flask:
 
     @app.get("/wireguard")
     def wireguard() -> str:
-        return render_template("wireguard.html", vpn=collect_vpn_status(), commands=build_wireguard_commands())
+        return render_template("wireguard.html", vpn=collect_vpn_status())
+
+    @app.get("/commands")
+    def commands() -> str:
+        return render_template(
+            "command_docs.html",
+            install_commands=build_install_commands(),
+            reset_commands=build_reset_commands(),
+            wireguard_commands=build_wireguard_commands(),
+            server_commands=build_server_commands(),
+        )
 
     @app.get("/display")
     def display_settings() -> str:
-        devices = collect_display_devices()
+        default_display = _default_x_display()
+        devices = collect_display_devices(x_display=default_display)
         return render_template(
             "display.html",
             outputs=devices.outputs,
             touch_devices=devices.touch_devices,
             rotations=ROTATION_LABELS,
-            default_display=_default_x_display(),
+            default_display=default_display,
         )
 
     @app.get("/api/display/devices")
     def display_devices() -> dict[str, object]:
-        devices = collect_display_devices()
+        x_display = request.args.get("display") or _default_x_display()
+        devices = collect_display_devices(x_display=x_display)
         return {
             "outputs": devices.outputs,
             "touchDevices": devices.touch_devices,
-            "defaultDisplay": _default_x_display(),
+            "defaultDisplay": x_display,
         }
 
     @app.post("/api/display/apply")
@@ -128,7 +137,7 @@ def create_app() -> Flask:
         if errors:
             return {"status": "error", "errors": errors}, 400
 
-        runner = CommandRunner()
+        runner = DisplayCommandRunner()
         configurator = DisplayConfigurator(runner)
         try:
             configurator.apply_runtime(output=output, touch=touch, rotate=rotate, x_display=x_display)
@@ -208,11 +217,25 @@ class DisplayDevices:
 def collect_display_devices(x_display: str | None = None) -> DisplayDevices:
     runner = CommandRunner()
     configurator = DisplayConfigurator(runner)
-    xrandr = runner.run(configurator._with_x_env(["xrandr", "--query"], x_display, None), check=False)
-    xinput = runner.run(configurator._with_x_env(["xinput", "list", "--name-only"], x_display, None), check=False)
+    resolved_display = x_display or _default_x_display()
+    xauthority = _default_xauthority()
+    xrandr = runner.run(configurator._with_x_env(["xrandr", "--query"], resolved_display, xauthority), check=False)
+    xinput = runner.run(configurator._with_x_env(["xinput", "list", "--name-only"], resolved_display, xauthority), check=False)
 
     outputs = parse_xrandr_outputs(xrandr.stdout)
     touch_devices = parse_xinput_touch_devices(xinput.stdout)
+    if outputs and touch_devices:
+        return DisplayDevices(outputs=outputs, touch_devices=touch_devices)
+
+    desktop_user = _desktop_user()
+    if desktop_user:
+        env_args = ["env", f"DISPLAY={resolved_display}"]
+        if xauthority:
+            env_args.append(f"XAUTHORITY={xauthority}")
+        xrandr = runner.run(["runuser", "-u", desktop_user, "--", *env_args, "xrandr", "--query"], check=False)
+        xinput = runner.run(["runuser", "-u", desktop_user, "--", *env_args, "xinput", "list", "--name-only"], check=False)
+        outputs = parse_xrandr_outputs(xrandr.stdout)
+        touch_devices = parse_xinput_touch_devices(xinput.stdout)
     return DisplayDevices(outputs=outputs, touch_devices=touch_devices)
 
 
@@ -248,6 +271,39 @@ def validate_display_apply(output: str, touch: str, rotate: str, devices: Displa
 
 def _default_x_display() -> str:
     return ":0"
+
+
+def _default_xauthority() -> str | None:
+    xauthority = Path.home() / ".Xauthority"
+    return xauthority.as_posix() if xauthority.exists() else None
+
+
+def _desktop_user() -> str | None:
+    if os.name != "posix" or not hasattr(os, "geteuid") or os.geteuid() != 0:
+        return None
+    sudo_user = os.environ.get("SUDO_USER", "").strip()
+    if sudo_user and sudo_user != "root":
+        return sudo_user
+    home_name = Path.home().name
+    if home_name and home_name != "root":
+        return home_name
+    return None
+
+
+class DisplayCommandRunner(CommandRunner):
+    def run(self, args, check: bool = True):  # type: ignore[no-untyped-def]
+        desktop_user = _desktop_user()
+        if desktop_user and _is_display_command(args):
+            return super().run(["runuser", "-u", desktop_user, "--", *args], check=check)
+        return super().run(args, check=check)
+
+
+def _is_display_command(args) -> bool:  # type: ignore[no-untyped-def]
+    if not args:
+        return False
+    if args[0] in {"xrandr", "xinput"}:
+        return True
+    return args[0] == "env" and any(part in {"xrandr", "xinput"} for part in args)
 
 
 def tool_marker(status: ToolStatus) -> str:

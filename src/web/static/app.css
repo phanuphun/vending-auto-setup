@@ -319,6 +319,28 @@ code {
   font: inherit;
 }
 
+.inline-control {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.inline-control button {
+  min-height: 38px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #ffffff;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+}
+
+.field-hint {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .check-row {
   display: flex;
   gap: 8px;
@@ -342,10 +364,8 @@ code {
   font-size: 16px;
 }
 
-.command-preview code {
-  min-height: 94px;
-  margin: 0;
-  border-radius: 0;
+.command-preview .command-list {
+  padding: 12px;
 }
 
 .apply-result {

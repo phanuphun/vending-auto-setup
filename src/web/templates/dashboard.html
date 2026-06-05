@@ -76,24 +76,4 @@
   </article>
 </section>
 
-<section class="panel">
-  <h2>Command Preview</h2>
-  <div class="command-columns">
-    <div>
-      <h3>Install</h3>
-      {% set commands = install_commands %}
-      {% include "_command_list.html" with context %}
-    </div>
-    <div>
-      <h3>WireGuard</h3>
-      {% set commands = wireguard_commands %}
-      {% include "_command_list.html" %}
-    </div>
-    <div>
-      <h3>Server</h3>
-      {% set commands = server_commands %}
-      {% include "_command_list.html" %}
-    </div>
-  </div>
-</section>
 {% endblock %}

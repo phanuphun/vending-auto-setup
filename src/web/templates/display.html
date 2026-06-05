@@ -42,8 +42,12 @@
         {% endfor %}
       </select>
 
-      <label for="xDisplay">X display</label>
-      <input id="xDisplay" value="{{ default_display }}" autocomplete="off">
+      <label for="xDisplay">X display server</label>
+      <div class="inline-control">
+        <input id="xDisplay" value="{{ default_display }}" autocomplete="off">
+        <button id="refreshDevices" type="button">Refresh</button>
+      </div>
+      <p class="field-hint">Usually :0. Display output is the monitor name from xrandr.</p>
 
       <label class="check-row">
         <input id="persistSession" type="checkbox" checked>
@@ -59,7 +63,7 @@
 
   <div class="command-preview">
     <h3>Command Preview</h3>
-    <code id="commandPreview">Select display and touchscreen.</code>
+    <ul class="command-list" id="commandPreviewList"></ul>
   </div>
 
   <div class="apply-result" id="applyResult" aria-live="polite"></div>
@@ -82,7 +86,7 @@ const rotationDegrees = {
 
 const preview = document.getElementById("monitorPreview");
 const previewLabel = document.getElementById("previewLabel");
-const commandPreview = document.getElementById("commandPreview");
+const commandPreviewList = document.getElementById("commandPreviewList");
 const applyResult = document.getElementById("applyResult");
 const outputSelect = document.getElementById("displayOutput");
 const touchSelect = document.getElementById("touchDevice");
@@ -106,21 +110,73 @@ function selectedConfig() {
   };
 }
 
+function replaceOptions(select, values) {
+  const currentValue = select.value;
+  select.innerHTML = "";
+  values.forEach((value) => {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = value;
+    select.appendChild(option);
+  });
+  if (values.includes(currentValue)) {
+    select.value = currentValue;
+  }
+}
+
+function commandItem(label, command, requiresRoot) {
+  const item = document.createElement("li");
+  const header = document.createElement("div");
+  const title = document.createElement("strong");
+  title.textContent = label;
+  header.appendChild(title);
+  if (requiresRoot) {
+    const badge = document.createElement("span");
+    badge.className = "badge warn";
+    badge.textContent = "sudo";
+    header.appendChild(badge);
+  }
+  const code = document.createElement("code");
+  code.textContent = command;
+  item.appendChild(header);
+  item.appendChild(code);
+  return item;
+}
+
 function updatePreview() {
   const config = selectedConfig();
   preview.style.transform = `rotate(${rotationDegrees[config.rotate]})`;
   preview.dataset.rotation = config.rotate;
   previewLabel.textContent = rotationLabels[config.rotate];
 
+  commandPreviewList.innerHTML = "";
+  if (!config.output || !config.touch) {
+    commandPreviewList.appendChild(commandItem("Select devices", "Select display output and touchscreen first.", false));
+    return;
+  }
+
   const displayArg = config.display ? ` --display ${shellQuote(config.display)}` : "";
   const applyCommand = `vas display apply${displayArg} --output ${shellQuote(config.output)} --touch ${shellQuote(config.touch)} --rotate ${config.rotate}`;
-  const persistSession = config.persistSession
-    ? `\nvas display persist-session${displayArg} --output ${shellQuote(config.output)} --touch ${shellQuote(config.touch)} --rotate ${config.rotate}`
-    : "";
-  const persistXorg = config.persistXorg
-    ? `\nsudo vas display persist-xorg --touch ${shellQuote(config.touch)} --rotate ${config.rotate}`
-    : "";
-  commandPreview.textContent = applyCommand + persistSession + persistXorg;
+  commandPreviewList.appendChild(commandItem("Apply runtime", applyCommand, false));
+  if (config.persistSession) {
+    const persistSession = `vas display persist-session${displayArg} --output ${shellQuote(config.output)} --touch ${shellQuote(config.touch)} --rotate ${config.rotate}`;
+    commandPreviewList.appendChild(commandItem("Persist at login", persistSession, false));
+  }
+  if (config.persistXorg) {
+    const persistXorg = `sudo vas display persist-xorg --touch ${shellQuote(config.touch)} --rotate ${config.rotate}`;
+    commandPreviewList.appendChild(commandItem("Persist touch in Xorg", persistXorg, true));
+  }
+}
+
+async function refreshDevices() {
+  applyResult.textContent = "Refreshing devices...";
+  const params = new URLSearchParams({ display: xDisplayInput.value.trim() || ":0" });
+  const response = await fetch(`{{ url_for('display_devices') }}?${params.toString()}`);
+  const result = await response.json();
+  replaceOptions(outputSelect, result.outputs || []);
+  replaceOptions(touchSelect, result.touchDevices || []);
+  applyResult.textContent = "";
+  updatePreview();
 }
 
 document.querySelectorAll(".rotation-button").forEach((button) => {
@@ -137,6 +193,9 @@ document.querySelectorAll(".rotation-button").forEach((button) => {
   control.addEventListener("change", updatePreview);
   control.addEventListener("input", updatePreview);
 });
+
+document.getElementById("refreshDevices").addEventListener("click", refreshDevices);
+xDisplayInput.addEventListener("change", refreshDevices);
 
 document.getElementById("applyDisplay").addEventListener("click", async () => {
   applyResult.textContent = "Applying...";

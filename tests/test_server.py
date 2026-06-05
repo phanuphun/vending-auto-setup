@@ -42,7 +42,7 @@ def test_command_previews_are_allowlisted_vas_commands() -> None:
     assert all(";" not in command.command for command in (*install_commands, *reset_commands, *wireguard_commands, *server_commands))
 
 
-def test_dashboard_route_renders_status_and_command_preview() -> None:
+def test_dashboard_route_renders_status_without_command_preview() -> None:
     app = create_app()
 
     with _patched_status_collectors():
@@ -55,8 +55,8 @@ def test_dashboard_route_renders_status_and_command_preview() -> None:
     assert "Remote" in body
     assert "123456789" in body
     assert "Web Server" in body
-    assert "sudo vas install --component all" in body
-    assert "sudo vas wireguard sync --name wg0" in body
+    assert "sudo vas install --component all" not in body
+    assert "sudo vas wireguard sync --name wg0" not in body
     assert "http://0.0.0.0:8888" in body
 
 
@@ -79,6 +79,33 @@ def test_display_route_renders_monitor_controls() -> None:
     assert "HDMI-1" in body
     assert "Vending Touchscreen" in body
     assert "Command Preview" in body
+
+
+def test_command_docs_route_renders_command_sections() -> None:
+    response = create_app().test_client().get("/commands")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "Command Docs" in body
+    assert "sudo vas install --component all" in body
+    assert "sudo vas reset --component docker" in body
+    assert "sudo vas wireguard sync --name wg0" in body
+    assert "sudo vas server start --host 0.0.0.0 --port 8888" in body
+
+
+def test_display_devices_api_uses_requested_x_display() -> None:
+    app = create_app()
+
+    with patch("server.collect_display_devices", return_value=DisplayDevices(("HDMI-1",), ("Vending Touchscreen",))) as collect:
+        response = app.test_client().get("/api/display/devices?display=:1")
+
+    assert response.status_code == 200
+    assert response.json == {
+        "outputs": ["HDMI-1"],
+        "touchDevices": ["Vending Touchscreen"],
+        "defaultDisplay": ":1",
+    }
+    collect.assert_called_once_with(x_display=":1")
 
 
 def test_display_device_parsers_extract_outputs_and_touchscreens() -> None:
