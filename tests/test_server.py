@@ -120,6 +120,12 @@ def test_display_device_parsers_extract_outputs_and_touchscreens() -> None:
     assert touches == ("Vending Touchscreen",)
 
 
+def test_xinput_parser_does_not_fallback_to_mouse_or_keyboard() -> None:
+    touches = parse_xinput_touch_devices("Virtual core pointer\nUSB Mouse\nVirtual core keyboard\n")
+
+    assert touches == ()
+
+
 def test_display_apply_validation_rejects_unknown_values() -> None:
     devices = DisplayDevices(outputs=("HDMI-1",), touch_devices=("Vending Touchscreen",))
 

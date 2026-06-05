@@ -250,8 +250,7 @@ def parse_xrandr_outputs(output: str) -> tuple[str, ...]:
 
 def parse_xinput_touch_devices(output: str) -> tuple[str, ...]:
     names = tuple(line.strip() for line in output.splitlines() if line.strip())
-    touch_names = tuple(name for name in names if "touch" in name.lower())
-    return touch_names or names
+    return tuple(name for name in names if "touch" in name.lower())
 
 
 def validate_display_apply(output: str, touch: str, rotate: str, devices: DisplayDevices) -> list[str]:
