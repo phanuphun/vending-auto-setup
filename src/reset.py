@@ -87,6 +87,7 @@ class LifecycleManager:
         self.runner.run(["apt-get", "autoremove", "-y"], check=False)
 
     def uninstall_node(self, remove_config: bool) -> None:
+        self.runner.run(["npm", "uninstall", "-g", "pm2"], check=False)
         self.runner.run(["apt-get", "purge", "-y", *NODE_PACKAGES], check=False)
         if remove_config:
             for path in NODE_APT_FILES:
@@ -172,7 +173,7 @@ def count_uninstall_operations(components: tuple[str, ...]) -> int:
     total = 1  # apt-get autoremove
     for component in expand_components(components, INSTALL_COMPONENTS):
         if component == "node":
-            total += 1
+            total += 2
         elif component == "docker":
             total += 4
         elif component == "git":
@@ -186,7 +187,7 @@ def count_reset_operations(components: tuple[str, ...]) -> int:
     total = 1  # apt-get autoremove
     for component in expand_components(components, RESET_COMPONENTS):
         if component == "node":
-            total += 3
+            total += 4
         elif component == "docker":
             total += 6
         elif component == "git":

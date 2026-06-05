@@ -86,6 +86,7 @@ TOOLS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("Git", "git", ("git", "--version")),
     ("Node.js", "node", ("node", "--version")),
     ("npm", "npm", ("npm", "--version")),
+    ("PM2", "pm2", ("pm2", "--version")),
     ("Docker", "docker", ("docker", "--version")),
 )
 

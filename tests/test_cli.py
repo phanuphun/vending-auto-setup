@@ -11,6 +11,7 @@ def test_check_command_runs_in_dry_run_mode(capsys: Any) -> None:
     output = capsys.readouterr().out
     assert "Vending Auto Setup Status" in output
     assert "Node.js" in output
+    assert "PM2" in output
     assert "Docker" in output
 
 
@@ -110,6 +111,7 @@ def test_install_all_dry_run_installs_wireguard(capsys: Any) -> None:
     assert "apt-get install -y wireguard" in output
     assert "apt-get install -y git" in output
     assert "apt-get install -y nodejs" in output
+    assert "npm install -g pm2" in output
     assert "docker-ce" in output
 
 

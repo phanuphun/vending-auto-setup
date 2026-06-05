@@ -9,7 +9,7 @@ Phase 1:
 - ติดตั้ง Docker Engine จาก official Docker apt repository
 - ติดตั้ง Node.js จาก NodeSource apt repository
 - ติดตั้ง Git จาก Ubuntu apt package
-- ตรวจสถานะ Git, Node.js, npm, Docker
+- ตรวจสถานะ Git, Node.js, npm, PM2, Docker
 
 Phase 2 ที่เริ่มทำแล้ว:
 
@@ -210,6 +210,7 @@ OK      Xorg       configured (/etc/X11/xorg.conf.d/99-vending-touchscreen.conf)
 OK      Git        git version 2.34.1
 OK      Node.js    v22.22.3
 OK      npm        10.9.8
+OK      PM2        6.0.13
 OK      Docker     Docker version 29.5.3, build d1c06ef
 ```
 
@@ -219,7 +220,7 @@ OK      Docker     Docker version 29.5.3, build d1c06ef
 - `[Display Config] Session` ตรวจว่า `~/.xprofile` มี managed block ของโปรแกรมหรือยัง
 - `[Display Config] Script` ตรวจว่า retry script มีอยู่และ executable หรือยัง
 - `[Touchscreen] Xorg` ตรวจว่า `/etc/X11/xorg.conf.d/99-vending-touchscreen.conf` มี signature หรือยัง
-- `[Core Tools]` ตรวจ Git, Node.js, npm, Docker
+- `[Core Tools]` ตรวจ Git, Node.js, npm, PM2, Docker
 
 ## ตรวจ X11, xrandr, xinput
 
@@ -586,7 +587,7 @@ component ที่รองรับ:
 
 สิ่งที่ reset ลบ:
 
-- `node`: package `nodejs`, `npm`, NodeSource apt source/key ที่โปรแกรมสร้าง
+- `node`: package `nodejs`, `npm`, global PM2, NodeSource apt source/key ที่โปรแกรมสร้าง
 - `docker`: Docker packages และ Docker apt source/key ที่โปรแกรมสร้าง
 - `git`: package `git`
 - `wireguard`: service `wg-quick@<interface>`, package WireGuard, active config เช่น `/etc/wireguard/wg0.conf`, และ app storage/history ของ WireGuard

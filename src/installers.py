@@ -75,6 +75,7 @@ class PhaseOneInstaller:
         self._write_file("/etc/apt/sources.list.d/nodesource.list", source_line + "\n")
         self.runner.run(["apt-get", "update"])
         self.runner.run(["apt-get", "install", "-y", "nodejs"])
+        self.runner.run(["npm", "install", "-g", "pm2"])
 
     def install_docker(self) -> None:
         self.runner.run(["apt-get", "remove", "-y", *OLD_DOCKER_PACKAGES], check=False)
@@ -107,7 +108,7 @@ class PhaseOneInstaller:
     def print_versions(self, components: tuple[str, ...]) -> None:
         commands: list[str] = []
         if "node" in components:
-            commands.extend(("node", "npm"))
+            commands.extend(("node", "npm", "pm2"))
         if "docker" in components:
             commands.append("docker")
         if "git" in components:
@@ -145,14 +146,14 @@ def count_install_operations(components: tuple[str, ...]) -> int:
     total = 2  # apt-get update and common package install
     for component in components:
         if component == "node":
-            total += 7
+            total += 8
         elif component == "docker":
             total += 8
         elif component == "git":
             total += 2
 
     if "node" in components:
-        total += 2  # node --version and npm --version
+        total += 3  # node --version, npm --version, and pm2 --version
     if "docker" in components:
         total += 1
     if "git" in components:
