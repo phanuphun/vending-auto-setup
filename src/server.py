@@ -116,7 +116,26 @@ def create_app() -> Flask:
             touch_devices=devices.touch_devices,
             rotations=ROTATION_LABELS,
             default_display=default_display,
+            session=collect_display_session_status(),
+            display_config=collect_display_session_config_status(),
+            display_script=collect_display_session_script_status(),
+            xorg_touchscreen=collect_xorg_touchscreen_config_status(),
         )
+
+    @app.get("/api/display/config-content")
+    def display_config_content() -> "tuple[dict[str, object], int] | dict[str, object]":
+        key = request.args.get("key", "").strip()
+        allowed = _allowed_config_paths()
+        if key not in allowed:
+            return {"error": f"Unknown config key: {key}"}, 400
+        path = allowed[key]
+        if not path.exists():
+            return {"exists": False, "content": None, "path": path.as_posix()}
+        try:
+            content = path.read_text(encoding="utf-8")
+            return {"exists": True, "content": content, "path": path.as_posix()}
+        except OSError as e:
+            return {"error": str(e)}, 500
 
     @app.get("/api/display/devices")
     def display_devices() -> dict[str, object]:
@@ -292,6 +311,18 @@ def validate_display_apply(output: str, touch: str, rotate: str, devices: Displa
     elif touch not in (d.name for d in devices.touch_devices):
         errors.append(f"Touchscreen device is not available: {touch}")
     return errors
+
+
+def _allowed_config_paths() -> "dict[str, object]":
+    """Allowlist ของ config files ที่อ่านได้ผ่าน API"""
+    from display import _effective_home_config_path, _effective_home_script_path
+    from status import XORG_TOUCHSCREEN_CONFIG_PATH
+    from pathlib import Path
+    return {
+        "xprofile": _effective_home_config_path(),
+        "display_script": _effective_home_script_path(),
+        "xorg_touchscreen": Path(XORG_TOUCHSCREEN_CONFIG_PATH),
+    }
 
 
 def _default_x_display() -> str:
