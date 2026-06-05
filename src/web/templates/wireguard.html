@@ -66,7 +66,7 @@
     </aside>
   </section>
 
-  <section class="wireguard-layout">
+  <section>
     <article class="panel">
       <div class="section-header">
         <div>
@@ -78,29 +78,30 @@
 
       <div class="history-list" id="historyList">
         {% for entry in history_entries %}
-        <button class="history-item" data-history-id="{{ entry.id }}" type="button">
-          <span>
-            <strong>{{ entry.id }}</strong>
-            <small>{{ entry.path }}</small>
-          </span>
-          <span class="badge {{ 'ok' if entry.valid else 'warn' }}">{{ 'OK' if entry.valid else 'WARN' }}</span>
-        </button>
+        <div class="history-entry" data-history-id="{{ entry.id }}">
+          <button class="history-item" type="button">
+            <span>
+              <strong>{{ entry.id }}</strong>
+              <small>{{ entry.path }}</small>
+            </span>
+            <span class="badge {{ 'ok' if entry.valid else 'warn' }}">{{ 'OK' if entry.valid else 'WARN' }}</span>
+          </button>
+          <div class="history-accordion" hidden>
+            <div class="section-header">
+              <div>
+                <h3>Snapshot Preview</h3>
+                <p class="muted history-path"></p>
+              </div>
+              <button class="danger-action delete-history" type="button">Delete</button>
+            </div>
+            <div class="validation-panel history-validation"></div>
+            <pre class="config-file-content history-content"></pre>
+          </div>
+        </div>
         {% else %}
         <p class="muted" id="historyEmpty">No history snapshots found.</p>
         {% endfor %}
       </div>
-    </article>
-
-    <article class="panel history-viewer" id="historyViewer" hidden>
-      <div class="section-header">
-        <div>
-          <h2 id="historyTitle">History Snapshot</h2>
-          <p class="muted" id="historyPath"></p>
-        </div>
-        <button class="danger-action" id="deleteHistory" type="button">Delete</button>
-      </div>
-      <div class="validation-panel" id="historyValidation"></div>
-      <pre class="config-file-content" id="historyContent"></pre>
     </article>
   </section>
 </section>
@@ -112,12 +113,6 @@ const configText = document.getElementById("wireguardConfig");
 const configValidation = document.getElementById("configValidation");
 const resultEl = document.getElementById("wireguardResult");
 const historyList = document.getElementById("historyList");
-const historyViewer = document.getElementById("historyViewer");
-const historyTitle = document.getElementById("historyTitle");
-const historyPath = document.getElementById("historyPath");
-const historyValidation = document.getElementById("historyValidation");
-const historyContent = document.getElementById("historyContent");
-let selectedHistoryId = "";
 
 function renderValidation(target, validation) {
   target.className = `validation-panel ${validation.valid ? "valid" : "invalid"}`;
@@ -226,15 +221,29 @@ function renderHistory(entries) {
     return;
   }
   entries.forEach((entry) => {
-    const button = document.createElement("button");
-    button.className = "history-item";
-    button.type = "button";
-    button.dataset.historyId = entry.id;
-    button.innerHTML = `<span><strong></strong><small></small></span><span class="badge ${entry.valid ? "ok" : "warn"}">${entry.valid ? "OK" : "WARN"}</span>`;
-    button.querySelector("strong").textContent = entry.id;
-    button.querySelector("small").textContent = entry.path;
-    button.addEventListener("click", () => loadHistory(entry.id));
-    historyList.appendChild(button);
+    const wrapper = document.createElement("div");
+    wrapper.className = "history-entry";
+    wrapper.dataset.historyId = entry.id;
+    wrapper.innerHTML = `
+      <button class="history-item" type="button">
+        <span><strong></strong><small></small></span>
+        <span class="badge ${entry.valid ? "ok" : "warn"}">${entry.valid ? "OK" : "WARN"}</span>
+      </button>
+      <div class="history-accordion" hidden>
+        <div class="section-header">
+          <div>
+            <h3>Snapshot Preview</h3>
+            <p class="muted history-path"></p>
+          </div>
+          <button class="danger-action delete-history" type="button">Delete</button>
+        </div>
+        <div class="validation-panel history-validation"></div>
+        <pre class="config-file-content history-content"></pre>
+      </div>`;
+    wrapper.querySelector("strong").textContent = entry.id;
+    wrapper.querySelector("small").textContent = entry.path;
+    bindHistoryEntry(wrapper);
+    historyList.appendChild(wrapper);
   });
 }
 
@@ -249,40 +258,55 @@ async function refreshHistory() {
 }
 
 async function loadHistory(historyId) {
-  selectedHistoryId = historyId;
+  const wrapper = historyList.querySelector(`[data-history-id="${CSS.escape(historyId)}"]`);
+  if (!wrapper) {
+    return;
+  }
+  const accordion = wrapper.querySelector(".history-accordion");
+  if (!accordion.hidden) {
+    accordion.hidden = true;
+    return;
+  }
   const response = await fetch(`/api/wireguard/history/${encodeURIComponent(historyId)}?name=${encodeURIComponent(interfaceName)}`);
   const data = await response.json();
   if (!response.ok) {
     setResult((data.errors || ["History load failed."]).join(" "), "error");
     return;
   }
-  historyViewer.hidden = false;
-  historyTitle.textContent = data.id;
-  historyPath.textContent = data.path;
-  historyContent.textContent = data.content;
-  renderValidation(historyValidation, data.validation);
+  historyList.querySelectorAll(".history-accordion").forEach((item) => {
+    item.hidden = item !== accordion;
+  });
+  wrapper.querySelector(".history-path").textContent = data.path;
+  wrapper.querySelector(".history-content").textContent = data.content;
+  renderValidation(wrapper.querySelector(".history-validation"), data.validation);
+  accordion.hidden = false;
 }
 
-document.querySelectorAll(".history-item").forEach((button) => {
-  button.addEventListener("click", () => loadHistory(button.dataset.historyId));
-});
-
-document.getElementById("refreshHistory").addEventListener("click", refreshHistory);
-
-document.getElementById("deleteHistory").addEventListener("click", async () => {
-  if (!selectedHistoryId || !confirm("Delete this WireGuard history snapshot?")) {
+async function deleteHistory(historyId) {
+  if (!historyId || !confirm("Delete this WireGuard history snapshot?")) {
     return;
   }
-  const response = await fetch(`/api/wireguard/history/${encodeURIComponent(selectedHistoryId)}?name=${encodeURIComponent(interfaceName)}`, { method: "DELETE" });
+  const response = await fetch(`/api/wireguard/history/${encodeURIComponent(historyId)}?name=${encodeURIComponent(interfaceName)}`, { method: "DELETE" });
   const data = await response.json();
   if (!response.ok) {
     setResult((data.errors || ["History delete failed."]).join(" "), "error");
     return;
   }
-  historyViewer.hidden = true;
-  selectedHistoryId = "";
   setResult(`Deleted history ${data.id}.`, "success");
   await refreshHistory();
-});
+}
+
+function bindHistoryEntry(wrapper) {
+  const historyId = wrapper.dataset.historyId;
+  wrapper.querySelector(".history-item").addEventListener("click", () => loadHistory(historyId));
+  wrapper.querySelector(".delete-history").addEventListener("click", (event) => {
+    event.stopPropagation();
+    deleteHistory(historyId);
+  });
+}
+
+document.querySelectorAll(".history-entry").forEach(bindHistoryEntry);
+
+document.getElementById("refreshHistory").addEventListener("click", refreshHistory);
 </script>
 {% endblock %}
