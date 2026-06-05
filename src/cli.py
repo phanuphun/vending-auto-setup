@@ -15,6 +15,7 @@ from reset import (
     count_uninstall_operations,
 )
 from runner import CommandRunner
+from server_service import ServerConfig, ServerServiceManager
 from status import print_status
 from system import require_linux, require_root
 from updater import DEFAULT_INSTALL_DIR, DEFAULT_REPO, SelfUpdater
@@ -54,10 +55,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     server = subcommands.add_parser("server", help="Start the local Flask HTTP dashboard.")
     server_subcommands = server.add_subparsers(dest="server_command", required=True)
-    server_start = server_subcommands.add_parser("start", help="Start the Flask dashboard server.")
-    server_start.add_argument("--host", default="127.0.0.1")
-    server_start.add_argument("--port", type=int, default=8080)
-    server_start.add_argument("--debug", action="store_true")
+    server_start = server_subcommands.add_parser("start", help="Install and start the dashboard as a background service.")
+    add_server_bind_arguments(server_start)
+    server_start.add_argument("--foreground", action="store_true", help="Run in the current terminal instead of systemd.")
+
+    server_run = server_subcommands.add_parser("run", help="Run the Flask dashboard in the current process.")
+    add_server_bind_arguments(server_run)
+    server_run.add_argument("--debug", action="store_true")
+
+    server_install = server_subcommands.add_parser("install-service", help="Install the dashboard systemd service.")
+    add_server_bind_arguments(server_install)
+    server_subcommands.add_parser("stop", help="Stop and disable the dashboard service.")
+    server_subcommands.add_parser("status", help="Show the dashboard service status.")
 
     display = subcommands.add_parser("display", help="Inspect and configure X11 display/touchscreen settings.")
     display_subcommands = display.add_subparsers(dest="display_command", required=True)
@@ -163,6 +172,11 @@ def add_wireguard_name_argument(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--name", "--interface", default="wg0", help="WireGuard interface name. Defaults to wg0.")
 
 
+def add_server_bind_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8080)
+
+
 def add_component_arguments(parser: argparse.ArgumentParser, choices: tuple[str, ...]) -> None:
     parser.add_argument(
         "--component",
@@ -211,7 +225,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "server":
-        if args.server_command == "start":
+        if args.server_command == "run" or (args.server_command == "start" and args.foreground):
             url = f"http://{args.host}:{args.port}"
             if args.dry_run:
                 print(f"start Flask server {url}")
@@ -222,12 +236,41 @@ def main(argv: list[str] | None = None) -> int:
                 if error.name != "flask":
                     raise
                 raise RuntimeError(
-                    "Flask is not installed. Run: sudo apt-get update && "
-                    "sudo apt-get install -y python3-flask"
+                    "Flask is not installed. Run the background service setup first: "
+                    "sudo vas server start"
                 ) from error
 
             print(f"Starting vending-auto-setup dashboard at {url}")
-            run_server(host=args.host, port=args.port, debug=args.debug)
+            run_server(host=args.host, port=args.port, debug=getattr(args, "debug", False))
+            return 0
+
+        service_manager = ServerServiceManager(runner)
+
+        if args.server_command == "install-service":
+            if not args.dry_run:
+                require_linux()
+                require_root()
+            service_manager.install(ServerConfig(host=args.host, port=args.port))
+            return 0
+
+        if args.server_command == "start":
+            if args.dry_run:
+                print(f"start dashboard service http://{args.host}:{args.port}")
+                return 0
+            require_linux()
+            require_root()
+            service_manager.start(ServerConfig(host=args.host, port=args.port))
+            return 0
+
+        if args.server_command == "stop":
+            if not args.dry_run:
+                require_linux()
+                require_root()
+            service_manager.stop()
+            return 0
+
+        if args.server_command == "status":
+            service_manager.status()
             return 0
 
     if args.command == "install":

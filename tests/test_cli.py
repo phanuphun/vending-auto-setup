@@ -58,6 +58,14 @@ def test_server_start_dry_run_prints_url(capsys: Any) -> None:
 
     assert exit_code == 0
     output = capsys.readouterr().out
+    assert "start dashboard service http://0.0.0.0:9090" in output
+
+
+def test_server_run_dry_run_prints_url(capsys: Any) -> None:
+    exit_code = main(["--dry-run", "server", "run", "--host", "0.0.0.0", "--port", "9090"])
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
     assert "start Flask server http://0.0.0.0:9090" in output
 
 

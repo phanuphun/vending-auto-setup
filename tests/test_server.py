@@ -4,13 +4,14 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
-from server import build_install_commands, build_reset_commands, build_wireguard_commands, create_app
+from server import build_install_commands, build_reset_commands, build_server_commands, build_wireguard_commands, create_app
 from status import (
     DisplaySessionConfigStatus,
     DisplaySessionScriptStatus,
     DisplaySessionStatus,
     ToolStatus,
     VpnStatus,
+    WebServerStatus,
     XorgTouchscreenConfigStatus,
 )
 
@@ -19,11 +20,13 @@ def test_command_previews_are_allowlisted_vas_commands() -> None:
     install_commands = build_install_commands()
     reset_commands = build_reset_commands()
     wireguard_commands = build_wireguard_commands()
+    server_commands = build_server_commands()
 
     assert any(command.command == "sudo vas install --component all" for command in install_commands)
     assert any(command.command == "sudo vas reset --component docker" for command in reset_commands)
     assert any(command.command == "sudo vas wireguard sync --name wg0" for command in wireguard_commands)
-    assert all(";" not in command.command for command in (*install_commands, *reset_commands, *wireguard_commands))
+    assert any(command.command == "sudo vas server start --host 0.0.0.0 --port 8888" for command in server_commands)
+    assert all(";" not in command.command for command in (*install_commands, *reset_commands, *wireguard_commands, *server_commands))
 
 
 def test_dashboard_route_renders_status_and_command_preview() -> None:
@@ -36,8 +39,10 @@ def test_dashboard_route_renders_status_and_command_preview() -> None:
     body = response.get_data(as_text=True)
     assert "Core Tools" in body
     assert "VPN" in body
+    assert "Web Server" in body
     assert "sudo vas install --component all" in body
     assert "sudo vas wireguard sync --name wg0" in body
+    assert "http://0.0.0.0:8888" in body
 
 
 def test_health_route_returns_ok() -> None:
@@ -81,5 +86,12 @@ def _patched_status_collectors() -> Any:
             service_active="active",
             interface_exists=True,
             handshake_peers=1,
+        ),
+        collect_web_server_status=lambda: WebServerStatus(
+            host="0.0.0.0",
+            port=8888,
+            url="http://0.0.0.0:8888",
+            service_enabled="enabled",
+            service_active="active",
         ),
     )

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
+from server_service import ENV_PATH, SERVICE_UNIT, ServerConfig, default_server_config
 from wireguard import WIREGUARD_CONFIG_DIR, default_store_dir, service_name
 
 
@@ -65,6 +66,15 @@ class VpnStatus:
     handshake_peers: int | None
 
 
+@dataclass(frozen=True)
+class WebServerStatus:
+    host: str
+    port: int
+    url: str
+    service_enabled: str
+    service_active: str
+
+
 XORG_TOUCHSCREEN_CONFIG_PATH = Path("/etc/X11/xorg.conf.d/99-vending-touchscreen.conf")
 XORG_TOUCHSCREEN_SIGNATURE = "# vending-auto-config: touchscreen-xorg"
 DISPLAY_SESSION_CONFIG_PATH = Path.home() / ".xprofile"
@@ -106,6 +116,17 @@ def collect_vpn_status(interface_name: str = "wg0") -> VpnStatus:
         service_active=_read_command_first_line(("systemctl", "is-active", service)),
         interface_exists=_command_succeeds(("wg", "show", interface_name)),
         handshake_peers=_count_handshake_peers(interface_name) if wg_path is not None else None,
+    )
+
+
+def collect_web_server_status() -> WebServerStatus:
+    config = _read_server_config()
+    return WebServerStatus(
+        host=config.host,
+        port=config.port,
+        url=config.url,
+        service_enabled=_read_command_first_line(("systemctl", "is-enabled", SERVICE_UNIT)),
+        service_active=_read_command_first_line(("systemctl", "is-active", SERVICE_UNIT)),
     )
 
 
@@ -205,6 +226,8 @@ def print_status() -> None:
         _print_tool_status(status)
     print()
     _print_vpn_status(collect_vpn_status())
+    print()
+    _print_web_server_status(collect_web_server_status())
 
 
 def main() -> int:
@@ -223,6 +246,8 @@ def main() -> int:
         _print_tool_status(status)
     print()
     _print_vpn_status(collect_vpn_status())
+    print()
+    _print_web_server_status(collect_web_server_status())
 
     return 0 if all(status.installed for status in statuses) else 1
 
@@ -288,6 +313,30 @@ def _path_exists(path: Path) -> bool:
         return path.exists()
     except OSError:
         return False
+
+
+def _read_server_config() -> ServerConfig:
+    config = default_server_config()
+    if not _path_exists(ENV_PATH):
+        return config
+
+    values: dict[str, str] = {}
+    try:
+        for raw_line in ENV_PATH.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            values[key.strip()] = value.strip().strip('"')
+    except OSError:
+        return config
+
+    host = values.get("VAS_SERVER_HOST", config.host)
+    try:
+        port = int(values.get("VAS_SERVER_PORT", str(config.port)))
+    except ValueError:
+        port = config.port
+    return ServerConfig(host=host, port=port)
 
 
 def _first_output_line(output: str) -> str | None:
@@ -393,6 +442,15 @@ def _print_vpn_status(status: VpnStatus) -> None:
         print(f"{'OK':7} {'Handshake':10} latest handshake from {status.handshake_peers} peer(s)")
     else:
         print(f"{'WARN':7} {'Handshake':10} no peer handshake detected")
+
+
+def _print_web_server_status(status: WebServerStatus) -> None:
+    print("[Web Server]")
+    enabled_marker = "OK" if status.service_enabled == "enabled" else "WARN"
+    active_marker = "OK" if status.service_active == "active" else "WARN"
+    print(f"{enabled_marker:7} {'Service':10} {SERVICE_UNIT} enabled={status.service_enabled}")
+    print(f"{active_marker:7} {'Connection':10} service {status.service_active}")
+    print(f"{'OK':7} {'Address':10} {status.url}")
 
 
 def _print_path_status(label: str, exists: bool, path: Path, ok_text: str, missing_text: str) -> None:

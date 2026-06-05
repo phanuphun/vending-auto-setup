@@ -13,6 +13,7 @@ from status import (
     collect_display_session_status,
     collect_status,
     collect_vpn_status,
+    collect_web_server_status,
     collect_xorg_touchscreen_config_status,
 )
 
@@ -29,6 +30,12 @@ WIREGUARD_ACTIONS = (
     ("Show status", "vas wireguard status --name wg0"),
     ("List history", "vas wireguard history --name wg0"),
     ("Unsync config", "sudo vas wireguard unsync --name wg0"),
+)
+SERVER_ACTIONS = (
+    ("Start background service", "sudo vas server start --host 0.0.0.0 --port 8888"),
+    ("Show service status", "vas server status"),
+    ("Run foreground", "vas server run --host 0.0.0.0 --port 8888"),
+    ("Stop service", "sudo vas server stop"),
 )
 
 
@@ -57,9 +64,11 @@ def create_app() -> Flask:
             display_script=collect_display_session_script_status(),
             touchscreen=collect_xorg_touchscreen_config_status(),
             vpn=collect_vpn_status(),
+            web_server=collect_web_server_status(),
             install_commands=build_install_commands(),
             reset_commands=build_reset_commands(),
             wireguard_commands=build_wireguard_commands(),
+            server_commands=build_server_commands(),
         )
 
     @app.get("/install")
@@ -114,6 +123,13 @@ def build_wireguard_commands() -> tuple[CommandPreview, ...]:
     return tuple(
         CommandPreview(label=label, command=command, requires_root=command.startswith("sudo "))
         for label, command in WIREGUARD_ACTIONS
+    )
+
+
+def build_server_commands() -> tuple[CommandPreview, ...]:
+    return tuple(
+        CommandPreview(label=label, command=command, requires_root=command.startswith("sudo "))
+        for label, command in SERVER_ACTIONS
     )
 
 

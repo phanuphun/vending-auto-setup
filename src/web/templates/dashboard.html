@@ -48,6 +48,18 @@
       <dd><span class="badge {{ 'ok' if vpn.service_active == 'active' and vpn.interface_exists else 'warn' }}">{{ 'OK' if vpn.service_active == 'active' and vpn.interface_exists else 'WARN' }}</span>{{ vpn_connection_label(vpn) }}</dd>
     </dl>
   </article>
+
+  <article class="panel">
+    <h2>Web Server</h2>
+    <dl>
+      <dt>Service</dt>
+      <dd><span class="badge {{ 'ok' if web_server.service_enabled == 'enabled' else 'warn' }}">{{ 'OK' if web_server.service_enabled == 'enabled' else 'WARN' }}</span>{{ web_server.service_enabled }}</dd>
+      <dt>Connection</dt>
+      <dd><span class="badge {{ 'ok' if web_server.service_active == 'active' else 'warn' }}">{{ 'OK' if web_server.service_active == 'active' else 'WARN' }}</span>{{ web_server.service_active }}</dd>
+      <dt>Address</dt>
+      <dd><span class="badge ok">OK</span>{{ web_server.url }}</dd>
+    </dl>
+  </article>
 </section>
 
 <section class="panel">
@@ -61,6 +73,11 @@
     <div>
       <h3>WireGuard</h3>
       {% set commands = wireguard_commands %}
+      {% include "_command_list.html" %}
+    </div>
+    <div>
+      <h3>Server</h3>
+      {% set commands = server_commands %}
       {% include "_command_list.html" %}
     </div>
   </div>

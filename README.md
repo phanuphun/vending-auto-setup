@@ -156,16 +156,29 @@ sudo vas update
 
 ## Local HTTP dashboard
 
-Start a local Flask dashboard for status review and command preview:
+Start the local Flask dashboard as a background systemd service:
 
 ```bash
-vas server start
+sudo vas server start
 ```
 
 Expose the dashboard to the LAN:
 
 ```bash
-vas server start --host 0.0.0.0 --port 8080
+sudo vas server start --host 0.0.0.0 --port 8080
+```
+
+`server start` ensures the `python3-flask` runtime package is installed, writes the dashboard service config, enables the service, and restarts it in the background. Check or stop the service with:
+
+```bash
+vas server status
+sudo vas server stop
+```
+
+For foreground debugging in the current terminal:
+
+```bash
+vas server run --host 0.0.0.0 --port 8080
 ```
 
 The web UI is preview-only. It shows the exact `vas` commands for install, reset, and WireGuard workflows, but it does not execute root commands from the browser.
