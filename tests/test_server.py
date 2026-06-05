@@ -23,7 +23,9 @@ def test_command_previews_are_allowlisted_vas_commands() -> None:
     server_commands = build_server_commands()
 
     assert any(command.command == "sudo vas install --component all" for command in install_commands)
+    assert any(command.command == "sudo vas install --component anydesk" for command in install_commands)
     assert any(command.command == "sudo vas reset --component docker" for command in reset_commands)
+    assert any(command.command == "sudo vas reset --component anydesk" for command in reset_commands)
     assert any(command.command == "sudo vas wireguard sync --name wg0" for command in wireguard_commands)
     assert any(command.command == "sudo vas server start --host 0.0.0.0 --port 8888" for command in server_commands)
     assert all(";" not in command.command for command in (*install_commands, *reset_commands, *wireguard_commands, *server_commands))

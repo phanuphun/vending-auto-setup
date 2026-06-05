@@ -9,7 +9,8 @@ Phase 1:
 - ติดตั้ง Docker Engine จาก official Docker apt repository
 - ติดตั้ง Node.js จาก NodeSource apt repository
 - ติดตั้ง Git จาก Ubuntu apt package
-- ตรวจสถานะ Git, Node.js, npm, PM2, Docker
+- ติดตั้ง AnyDesk จาก AnyDesk DEB repository
+- ตรวจสถานะ Git, Node.js, npm, PM2, Docker, AnyDesk
 
 Phase 2 ที่เริ่มทำแล้ว:
 
@@ -212,6 +213,7 @@ OK      Node.js    v22.22.3
 OK      npm        10.9.8
 OK      PM2        6.0.13
 OK      Docker     Docker version 29.5.3, build d1c06ef
+OK      AnyDesk    anydesk version 7.1.0
 ```
 
 ความหมาย:
@@ -220,7 +222,7 @@ OK      Docker     Docker version 29.5.3, build d1c06ef
 - `[Display Config] Session` ตรวจว่า `~/.xprofile` มี managed block ของโปรแกรมหรือยัง
 - `[Display Config] Script` ตรวจว่า retry script มีอยู่และ executable หรือยัง
 - `[Touchscreen] Xorg` ตรวจว่า `/etc/X11/xorg.conf.d/99-vending-touchscreen.conf` มี signature หรือยัง
-- `[Core Tools]` ตรวจ Git, Node.js, npm, PM2, Docker
+- `[Core Tools]` ตรวจ Git, Node.js, npm, PM2, Docker, AnyDesk
 
 ## ตรวจ X11, xrandr, xinput
 
@@ -581,9 +583,9 @@ sudo vending-auto-setup reset --component all
 
 component ที่รองรับ:
 
-- `install`: `node`, `docker`, `git`, `wireguard`, `all`
-- `uninstall`: `node`, `docker`, `git`, `wireguard`, `all`
-- `reset`: `node`, `docker`, `git`, `wireguard`, `display`, `all`
+- `install`: `node`, `docker`, `git`, `wireguard`, `anydesk`, `all`
+- `uninstall`: `node`, `docker`, `git`, `wireguard`, `anydesk`, `all`
+- `reset`: `node`, `docker`, `git`, `wireguard`, `anydesk`, `display`, `all`
 
 สิ่งที่ reset ลบ:
 
@@ -591,6 +593,7 @@ component ที่รองรับ:
 - `docker`: Docker packages และ Docker apt source/key ที่โปรแกรมสร้าง
 - `git`: package `git`
 - `wireguard`: service `wg-quick@<interface>`, package WireGuard, active config เช่น `/etc/wireguard/wg0.conf`, และ app storage/history ของ WireGuard
+- `anydesk`: service/package `anydesk` และ AnyDesk apt source/key ที่โปรแกรมสร้าง
 - `display`: Xorg touchscreen config ที่มี signature ของโปรแกรม, display session script, และ managed block ใน `~/.xprofile`
 
 Docker reset จะไม่ลบ `/var/lib/docker` ดังนั้น volume, image, container data จะยังถูกเก็บไว้

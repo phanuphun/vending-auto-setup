@@ -14,8 +14,8 @@ from status import (
 from wireguard import WIREGUARD_CONFIG_DIR, default_store_dir, sanitize_interface_name, service_name
 
 
-INSTALL_COMPONENTS = ("node", "docker", "git", "wireguard")
-RESET_COMPONENTS = ("node", "docker", "git", "wireguard", "display")
+INSTALL_COMPONENTS = ("node", "docker", "git", "wireguard", "anydesk")
+RESET_COMPONENTS = ("node", "docker", "git", "wireguard", "anydesk", "display")
 
 NODE_APT_FILES = (
     Path("/etc/apt/sources.list.d/nodesource.list"),
@@ -24,6 +24,10 @@ NODE_APT_FILES = (
 DOCKER_APT_FILES = (
     Path("/etc/apt/sources.list.d/docker.list"),
     Path("/etc/apt/keyrings/docker.asc"),
+)
+ANYDESK_APT_FILES = (
+    Path("/etc/apt/sources.list.d/anydesk.list"),
+    Path("/usr/share/keyrings/anydesk.gpg"),
 )
 DOCKER_PACKAGES = (
     "docker-ce",
@@ -43,6 +47,7 @@ DOCKER_PACKAGES = (
 NODE_PACKAGES = ("nodejs", "npm")
 GIT_PACKAGES = ("git",)
 WIREGUARD_PACKAGES = ("wireguard", "wireguard-tools")
+ANYDESK_PACKAGES = ("anydesk",)
 
 
 class LifecycleManager:
@@ -66,6 +71,8 @@ class LifecycleManager:
                 self.uninstall_git()
             elif component == "wireguard":
                 self.uninstall_wireguard(wireguard_name, remove_config=False)
+            elif component == "anydesk":
+                self.uninstall_anydesk(remove_config=False)
             else:
                 raise ValueError(f"Unsupported uninstall component: {component}")
         self.runner.run(["apt-get", "autoremove", "-y"], check=False)
@@ -82,6 +89,8 @@ class LifecycleManager:
                 self.uninstall_wireguard(wireguard_name, remove_config=True)
             elif component == "display":
                 self.reset_display_config()
+            elif component == "anydesk":
+                self.uninstall_anydesk(remove_config=True)
             else:
                 raise ValueError(f"Unsupported reset component: {component}")
         self.runner.run(["apt-get", "autoremove", "-y"], check=False)
@@ -112,6 +121,13 @@ class LifecycleManager:
         if remove_config:
             self._remove_file(self.wireguard_dir / f"{interface}.conf")
             self._remove_dir(self.wireguard_store_dir)
+
+    def uninstall_anydesk(self, remove_config: bool) -> None:
+        self.runner.run(["systemctl", "disable", "--now", "anydesk"], check=False)
+        self.runner.run(["apt-get", "purge", "-y", *ANYDESK_PACKAGES], check=False)
+        if remove_config:
+            for path in ANYDESK_APT_FILES:
+                self._remove_file(path)
 
     def reset_display_config(self) -> None:
         self._remove_file_if_has_signature(XORG_TOUCHSCREEN_CONFIG_PATH, XORG_TOUCHSCREEN_SIGNATURE)
@@ -180,6 +196,8 @@ def count_uninstall_operations(components: tuple[str, ...]) -> int:
             total += 1
         elif component == "wireguard":
             total += 2
+        elif component == "anydesk":
+            total += 2
     return total
 
 
@@ -196,6 +214,8 @@ def count_reset_operations(components: tuple[str, ...]) -> int:
             total += 4
         elif component == "display":
             total += 3
+        elif component == "anydesk":
+            total += 4
     return total
 
 

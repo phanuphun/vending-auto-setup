@@ -287,7 +287,7 @@ def main(argv: list[str] | None = None) -> int:
         components = tuple(args.component) if args.component else ("node", "docker", "git")
         if "all" in components:
             components = (*INSTALL_COMPONENTS,)
-        core_components = tuple(component for component in components if component in {"node", "docker", "git"})
+        core_components = tuple(component for component in components if component in {"node", "docker", "git", "anydesk"})
         total_operations = count_install_operations(core_components) if core_components else 0
         if "wireguard" in components:
             total_operations += 2

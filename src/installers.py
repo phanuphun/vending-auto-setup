@@ -28,6 +28,7 @@ NODE_PACKAGES_TO_PURGE = (
     "nodejs",
     "npm",
 )
+ANYDESK_APT_SOURCE = "deb [signed-by=/usr/share/keyrings/anydesk.gpg] https://deb.anydesk.com/ all main"
 
 
 class PhaseOneInstaller:
@@ -48,6 +49,8 @@ class PhaseOneInstaller:
                 self.install_docker()
             elif component == "git":
                 self.install_git()
+            elif component == "anydesk":
+                self.install_anydesk()
             else:
                 raise ValueError(f"Unsupported install component: {component}")
         self.print_versions(components)
@@ -105,6 +108,23 @@ class PhaseOneInstaller:
         package = "git" if self.config.git_version is None else f"git={self.config.git_version}"
         self.runner.run(["apt-get", "install", "-y", package])
 
+    def install_anydesk(self) -> None:
+        self.runner.run(["apt-get", "purge", "-y", "anydesk"], check=False)
+        self.runner.run(["rm", "-f", "/etc/apt/sources.list.d/anydesk.list"], check=False)
+        self.runner.run(["rm", "-f", "/usr/share/keyrings/anydesk.gpg"], check=False)
+        self.runner.run(
+            [
+                "bash",
+                "-lc",
+                "curl -fsSL https://keys.anydesk.com/repos/DEB-GPG-KEY "
+                "| gpg --dearmor -o /usr/share/keyrings/anydesk.gpg",
+            ]
+        )
+        self._write_file("/etc/apt/sources.list.d/anydesk.list", ANYDESK_APT_SOURCE + "\n")
+        self.runner.run(["apt-get", "update"])
+        self.runner.run(["apt-get", "install", "-y", "anydesk"])
+        self.runner.run(["systemctl", "enable", "--now", "anydesk"], check=False)
+
     def print_versions(self, components: tuple[str, ...]) -> None:
         commands: list[str] = []
         if "node" in components:
@@ -113,6 +133,8 @@ class PhaseOneInstaller:
             commands.append("docker")
         if "git" in components:
             commands.append("git")
+        if "anydesk" in components:
+            commands.append("anydesk")
         for command in commands:
             self.runner.run([command, "--version"], check=False)
 
@@ -148,14 +170,18 @@ def count_install_operations(components: tuple[str, ...]) -> int:
         if component == "node":
             total += 8
         elif component == "docker":
-            total += 8
+            total += 7
         elif component == "git":
             total += 2
+        elif component == "anydesk":
+            total += 8
 
     if "node" in components:
         total += 3  # node --version, npm --version, and pm2 --version
     if "docker" in components:
         total += 1
     if "git" in components:
+        total += 1
+    if "anydesk" in components:
         total += 1
     return total

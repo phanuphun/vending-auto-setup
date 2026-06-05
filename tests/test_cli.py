@@ -112,6 +112,8 @@ def test_install_all_dry_run_installs_wireguard(capsys: Any) -> None:
     assert "apt-get install -y git" in output
     assert "apt-get install -y nodejs" in output
     assert "npm install -g pm2" in output
+    assert "apt-get install -y anydesk" in output
+    assert "https://deb.anydesk.com/" in output
     assert "docker-ce" in output
 
 
@@ -165,6 +167,17 @@ def test_reset_wireguard_dry_run_removes_active_and_app_configs(capsys: Any, tmp
     assert "apt-get purge -y wireguard wireguard-tools" in output
     assert f"remove {(wireguard_dir / 'wg0.conf').as_posix()}" in output
     assert f"remove {store_dir.as_posix()}" in output
+
+
+def test_reset_anydesk_dry_run_removes_managed_apt_config(capsys: Any) -> None:
+    exit_code = main(["--dry-run", "reset", "--component", "anydesk"])
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert "systemctl disable --now anydesk" in output
+    assert "apt-get purge -y anydesk" in output
+    assert "remove /etc/apt/sources.list.d/anydesk.list" in output
+    assert "remove /usr/share/keyrings/anydesk.gpg" in output
 
 
 def test_about_os_command_prints_poc_header(capsys: Any) -> None:

@@ -88,6 +88,7 @@ TOOLS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("npm", "npm", ("npm", "--version")),
     ("PM2", "pm2", ("pm2", "--version")),
     ("Docker", "docker", ("docker", "--version")),
+    ("AnyDesk", "anydesk", ("anydesk", "--version")),
 )
 
 

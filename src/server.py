@@ -19,8 +19,8 @@ from status import (
 
 
 WEB_DIR = Path(__file__).parent / "web"
-INSTALL_COMPONENTS = ("all", "git", "node", "docker", "wireguard")
-LIFECYCLE_COMPONENTS = ("all", "git", "node", "docker", "wireguard")
+INSTALL_COMPONENTS = ("all", "git", "node", "docker", "wireguard", "anydesk")
+LIFECYCLE_COMPONENTS = ("all", "git", "node", "docker", "wireguard", "anydesk")
 WIREGUARD_ACTIONS = (
     ("Install", "sudo vas wireguard install"),
     ("Create template", "vas wireguard init-config --name wg0 --output ./wg0.conf"),
