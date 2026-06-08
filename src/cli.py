@@ -68,7 +68,7 @@ def build_parser() -> argparse.ArgumentParser:
     server_subcommands.add_parser("stop", help="Stop and disable the dashboard service.")
     server_subcommands.add_parser("status", help="Show the dashboard service status.")
 
-    display = subcommands.add_parser("display", help="Inspect and configure X11 display/touchscreen settings.")
+    display = subcommands.add_parser("display", help="Inspect and configure display/touchscreen settings.")
     display_subcommands = display.add_subparsers(dest="display_command", required=True)
 
     display_status = display_subcommands.add_parser("status", help="Show xrandr and xinput status.")
@@ -107,6 +107,9 @@ def build_parser() -> argparse.ArgumentParser:
     display_persist_session.add_argument("--rotate", choices=sorted(ROTATION_MATRICES), required=True)
     display_persist_session.add_argument("--delay-seconds", type=int, default=5)
     display_persist_session.add_argument("--retries", type=int, default=30)
+
+    display_subcommands.add_parser("disable-wayland", help="Disable Wayland in GDM so the machine logs into X11.")
+    display_subcommands.add_parser("enable-wayland", help="Re-enable GDM Wayland by commenting out WaylandEnable=false.")
 
     wireguard = subcommands.add_parser("wireguard", help="Install, stage, sync, and inspect WireGuard configs.")
     wireguard.add_argument("--store-dir", type=Path, help="App storage directory for saved configs and history.")
@@ -346,6 +349,20 @@ def _run_parsed_command(args: argparse.Namespace, runner: CommandRunner, parser:
                 delay_seconds=args.delay_seconds,
                 retries=args.retries,
             )
+            return 0
+
+        if args.display_command == "disable-wayland":
+            if not args.dry_run:
+                require_linux()
+                require_root()
+            configurator.disable_wayland()
+            return 0
+
+        if args.display_command == "enable-wayland":
+            if not args.dry_run:
+                require_linux()
+                require_root()
+            configurator.enable_wayland()
             return 0
 
     if args.command == "wireguard":

@@ -55,6 +55,8 @@ def test_command_previews_are_allowlisted_vas_commands() -> None:
     assert any(command.command == "sudo vas reset --component docker" for command in reset_commands)
     assert any(command.command == "sudo vas reset --component anydesk" for command in reset_commands)
     assert any(command.command == "vas display status --display :0" for command in display_commands)
+    assert any(command.command == "sudo vas display disable-wayland" for command in display_commands)
+    assert any(command.command == "sudo vas display enable-wayland" for command in display_commands)
     assert any(command.command.startswith("sudo vas display persist-xorg") for command in display_commands)
     assert any(command.command == "sudo vas wireguard sync --name wg0" for command in wireguard_commands)
     assert any(command.command == "sudo vas server start --host 0.0.0.0 --port 8888" for command in server_commands)
@@ -114,6 +116,8 @@ def test_command_docs_route_renders_command_sections() -> None:
     assert "sudo vas install --component all" in body
     assert "sudo vas reset --component docker" in body
     assert "vas display status --display :0" in body
+    assert "sudo vas display disable-wayland" in body
+    assert "sudo vas display enable-wayland" in body
     assert "sudo vas wireguard sync --name wg0" in body
     assert "sudo vas server start --host 0.0.0.0 --port 8888" in body
 

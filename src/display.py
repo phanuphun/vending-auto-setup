@@ -11,6 +11,7 @@ from runner import CommandRunner
 from status import (
     DISPLAY_SESSION_SCRIPT_SIGNATURE,
     DISPLAY_SESSION_SIGNATURE,
+    GDM_CUSTOM_CONFIG_PATH,
     XORG_TOUCHSCREEN_CONFIG_PATH,
     XORG_TOUCHSCREEN_SIGNATURE,
     _effective_home_config_path,
@@ -45,6 +46,7 @@ __all__ = [
     "TouchDevice",
     "build_display_session_block",
     "build_display_session_script",
+    "build_gdm_wayland_config",
     "build_xorg_touchscreen_config",
     "get_udevadm_touchscreen_names",
     "list_touch_devices",
@@ -155,13 +157,35 @@ class DisplayConfigurator:
         path.write_text(upsert_managed_block(existing_content, content), encoding="utf-8")
         _chown_to_effective_user(path)
 
+    def disable_wayland(self, path: Path = GDM_CUSTOM_CONFIG_PATH) -> None:
+        self._set_gdm_wayland(enabled=False, path=path)
+
+    def enable_wayland(self, path: Path = GDM_CUSTOM_CONFIG_PATH) -> None:
+        self._set_gdm_wayland(enabled=True, path=path)
+
+    def _set_gdm_wayland(self, enabled: bool, path: Path) -> None:
+        action = "enable" if enabled else "disable"
+        print(f"{action} Wayland in {path.as_posix()}")
+
+        existing_content = ""
+        if path.exists():
+            existing_content = path.read_text(encoding="utf-8")
+        content = build_gdm_wayland_config(existing_content, enabled=enabled)
+
+        if self.runner.dry_run:
+            print(content.rstrip())
+            return
+
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+
     def _with_x_env(
         self,
-        args: list,
+        args: list[str],
         x_display: "str | None",
         xauthority: "str | None",
-    ) -> list:
-        env_args = []
+    ) -> list[str]:
+        env_args: list[str] = []
         resolved_display = x_display or os.environ.get("DISPLAY")
         if resolved_display:
             env_args.append(f"DISPLAY={resolved_display}")
@@ -210,10 +234,10 @@ def get_udevadm_touchscreen_names(runner: CommandRunner) -> "frozenset[str]":
     block: "list[str]" = []
 
     def _process_block(lines: "list[str]") -> None:
-        if any(l == "E: ID_INPUT_TOUCHSCREEN=1" for l in lines):
-            for l in lines:
-                if l.startswith("E: NAME="):
-                    name = l[8:].strip().strip('"')
+        if any(line == "E: ID_INPUT_TOUCHSCREEN=1" for line in lines):
+            for line in lines:
+                if line.startswith("E: NAME="):
+                    name = line[8:].strip().strip('"')
                     if name:
                         names.add(name)
 
@@ -275,8 +299,8 @@ def _chown_to_effective_user(path: Path) -> None:
         return
     try:
         import pwd
-        pw = pwd.getpwnam(sudo_user)
-        os.chown(path, pw.pw_uid, pw.pw_gid)
+        pw = pwd.getpwnam(sudo_user)  # type: ignore[attr-defined]
+        os.chown(path, pw.pw_uid, pw.pw_gid)  # type: ignore[attr-defined]
     except (ImportError, KeyError, OSError):
         pass
 
@@ -364,6 +388,61 @@ def build_display_session_block(script_path: Path) -> str:
         f"{shlex.quote(script_path.as_posix())} &\n"
         f"{DISPLAY_SESSION_END}\n"
     )
+
+
+def build_gdm_wayland_config(existing_content: str, enabled: bool) -> str:
+    lines = existing_content.splitlines()
+    if not lines:
+        if enabled:
+            return "[daemon]\n#WaylandEnable=false\n"
+        return "[daemon]\nWaylandEnable=false\n"
+
+    daemon_start, daemon_end = _find_section_bounds(lines, "daemon")
+    if daemon_start is None:
+        block = ["[daemon]", "#WaylandEnable=false" if enabled else "WaylandEnable=false"]
+        separator = [] if lines[-1].strip() == "" else [""]
+        return "\n".join([*lines, *separator, *block]) + "\n"
+
+    daemon_lines = lines[daemon_start + 1 : daemon_end]
+    replacement = "#WaylandEnable=false" if enabled else "WaylandEnable=false"
+    active_indexes = [
+        index
+        for index, line in enumerate(daemon_lines, start=daemon_start + 1)
+        if _is_active_ini_key(line, "WaylandEnable")
+    ]
+
+    updated = list(lines)
+    if active_indexes:
+        for index in active_indexes:
+            updated[index] = replacement
+    elif not enabled:
+        updated.insert(daemon_start + 1, "WaylandEnable=false")
+
+    return "\n".join(updated) + "\n"
+
+
+def _find_section_bounds(lines: list[str], section_name: str) -> tuple[int | None, int]:
+    normalized_section = section_name.lower()
+    start: int | None = None
+    for index, raw_line in enumerate(lines):
+        line = raw_line.strip()
+        if not (line.startswith("[") and line.endswith("]")):
+            continue
+        current_section = line[1:-1].strip().lower()
+        if start is None:
+            if current_section == normalized_section:
+                start = index
+            continue
+        return start, index
+    return start, len(lines)
+
+
+def _is_active_ini_key(line: str, key: str) -> bool:
+    stripped = line.strip()
+    if not stripped or stripped.startswith(("#", ";")) or "=" not in stripped:
+        return False
+    found_key, _ = stripped.split("=", 1)
+    return found_key.strip().lower() == key.lower()
 
 
 def upsert_managed_block(existing_content: str, managed_block: str) -> str:

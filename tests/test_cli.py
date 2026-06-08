@@ -258,3 +258,22 @@ def test_display_persist_session_dry_run_prints_xprofile_block(capsys: Any) -> N
     assert "# vending-auto-config: display-session BEGIN" in output
     assert 'xrandr --output "$OUTPUT" --rotate "$ROTATE"' in output
     assert 'xinput set-prop "$TOUCH_DEVICE"' in output
+
+
+def test_display_disable_wayland_dry_run_prints_gdm_config(capsys: Any) -> None:
+    exit_code = main(["--dry-run", "display", "disable-wayland"])
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert "disable Wayland in /etc/gdm3/custom.conf" in output
+    assert "[daemon]" in output
+    assert "WaylandEnable=false" in output
+
+
+def test_display_enable_wayland_dry_run_comments_gdm_disable(capsys: Any) -> None:
+    exit_code = main(["--dry-run", "display", "enable-wayland"])
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert "enable Wayland in /etc/gdm3/custom.conf" in output
+    assert "#WaylandEnable=false" in output

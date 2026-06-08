@@ -118,7 +118,7 @@ def _service_home() -> Path:
         try:
             import pwd
 
-            return Path(pwd.getpwnam(sudo_user).pw_dir)
+            return Path(pwd.getpwnam(sudo_user).pw_dir)  # type: ignore[attr-defined]
         except (ImportError, KeyError):
             pass
     return Path.home()

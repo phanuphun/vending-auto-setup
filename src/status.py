@@ -50,6 +50,15 @@ class DisplaySessionScriptStatus:
 
 
 @dataclass(frozen=True)
+class GdmWaylandStatus:
+    path: Path
+    exists: bool
+    readable: bool
+    disabled: bool
+    value: str | None
+
+
+@dataclass(frozen=True)
 class VpnStatus:
     interface_name: str
     wg_installed: bool
@@ -86,6 +95,7 @@ class RemoteAccessStatus:
 
 
 XORG_TOUCHSCREEN_CONFIG_PATH = Path("/etc/X11/xorg.conf.d/99-vending-touchscreen.conf")
+GDM_CUSTOM_CONFIG_PATH = Path("/etc/gdm3/custom.conf")
 XORG_TOUCHSCREEN_SIGNATURE = "# vending-auto-config: touchscreen-xorg"
 DISPLAY_SESSION_SIGNATURE = "# vending-auto-config: display-session"
 DISPLAY_SESSION_SCRIPT_SIGNATURE = "# vending-auto-config: display-session-script"
@@ -101,7 +111,7 @@ def _effective_home() -> Path:
         try:
             import pwd
 
-            return Path(pwd.getpwnam(sudo_user).pw_dir)
+            return Path(pwd.getpwnam(sudo_user).pw_dir)  # type: ignore[attr-defined]
         except (ImportError, KeyError):
             pass
     return Path.home()
@@ -266,10 +276,31 @@ def collect_display_session_script_status(
     )
 
 
+def collect_gdm_wayland_status(path: Path = GDM_CUSTOM_CONFIG_PATH) -> GdmWaylandStatus:
+    if not _path_exists(path):
+        return GdmWaylandStatus(path=path, exists=False, readable=False, disabled=False, value=None)
+
+    try:
+        content = path.read_text(encoding="utf-8")
+    except OSError:
+        return GdmWaylandStatus(path=path, exists=True, readable=False, disabled=False, value=None)
+
+    value = _read_gdm_daemon_key(content, "WaylandEnable")
+    return GdmWaylandStatus(
+        path=path,
+        exists=True,
+        readable=True,
+        disabled=(value or "").lower() == "false",
+        value=value,
+    )
+
+
 def print_status() -> None:
     print("Vending Auto Setup Status")
     print()
     _print_display_session_status(collect_display_session_status())
+    print()
+    _print_gdm_wayland_status(collect_gdm_wayland_status())
     print()
     _print_display_session_config_status(collect_display_session_config_status())
     _print_display_session_script_status(collect_display_session_script_status())
@@ -292,6 +323,8 @@ def main() -> int:
     print("Vending Auto Setup Status")
     print()
     _print_display_session_status(collect_display_session_status())
+    print()
+    _print_gdm_wayland_status(collect_gdm_wayland_status())
     print()
     _print_display_session_config_status(collect_display_session_config_status())
     _print_display_session_script_status(collect_display_session_script_status())
@@ -410,6 +443,25 @@ def _first_output_line(output: str) -> str | None:
     return stripped_output.splitlines()[0] if stripped_output else None
 
 
+def _read_gdm_daemon_key(content: str, key: str) -> str | None:
+    in_daemon = False
+    result: str | None = None
+    normalized_key = key.lower()
+    for raw_line in content.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith(("#", ";")):
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            in_daemon = line[1:-1].strip().lower() == "daemon"
+            continue
+        if not in_daemon or "=" not in line:
+            continue
+        found_key, value = line.split("=", 1)
+        if found_key.strip().lower() == normalized_key:
+            result = value.strip()
+    return result
+
+
 def _read_loginctl_session_type() -> str | None:
     session_id = os.environ.get("XDG_SESSION_ID", "").strip()
     if session_id:
@@ -449,6 +501,24 @@ def _print_display_session_status(status: DisplaySessionStatus) -> None:
     marker = "OK" if status.is_x11 else "WARN"
     detail = f"{status.session_type} ({status.source})"
     print(f"{marker:7} {'Display':10} {detail}")
+
+
+def _print_gdm_wayland_status(status: GdmWaylandStatus) -> None:
+    print("[GDM Wayland]")
+    config_path = status.path.as_posix()
+    if status.disabled:
+        marker = "OK"
+        detail = f"disabled (WaylandEnable=false in {config_path})"
+    elif status.exists and not status.readable:
+        marker = "WARN"
+        detail = f"unable to read {config_path}"
+    elif status.value is None:
+        marker = "WARN"
+        detail = f"enabled by default (no WaylandEnable=false in {config_path})"
+    else:
+        marker = "WARN"
+        detail = f"enabled (WaylandEnable={status.value} in {config_path})"
+    print(f"{marker:7} {'GDM':10} {detail}")
 
 
 def _print_tool_status(status: ToolStatus) -> None:

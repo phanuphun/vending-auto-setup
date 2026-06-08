@@ -8,6 +8,7 @@ from status import (
     RemoteAccessStatus,
     VpnStatus,
     XORG_TOUCHSCREEN_SIGNATURE,
+    collect_gdm_wayland_status,
     collect_remote_access_status,
     collect_vpn_status,
     collect_display_session_status,
@@ -58,6 +59,30 @@ def test_display_session_status_warns_for_wayland() -> None:
 
     assert status.is_x11 is False
     assert status.session_type == "wayland"
+
+
+def test_gdm_wayland_status_is_ok_when_disabled(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    config_path = tmp_path / "custom.conf"
+    config_path.write_text("[daemon]\nWaylandEnable=false\n", encoding="utf-8")
+
+    status = collect_gdm_wayland_status(config_path)
+
+    assert status.exists is True
+    assert status.readable is True
+    assert status.disabled is True
+    assert status.value == "false"
+
+
+def test_gdm_wayland_status_warns_when_default_enabled(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    config_path = tmp_path / "custom.conf"
+    config_path.write_text("[daemon]\n#WaylandEnable=false\n", encoding="utf-8")
+
+    status = collect_gdm_wayland_status(config_path)
+
+    assert status.exists is True
+    assert status.readable is True
+    assert status.disabled is False
+    assert status.value is None
 
 
 def test_xorg_touchscreen_config_status_warns_when_file_is_missing(tmp_path) -> None:  # type: ignore[no-untyped-def]

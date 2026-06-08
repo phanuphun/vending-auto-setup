@@ -60,6 +60,8 @@ WIREGUARD_ACTIONS = (
 DISPLAY_ACTIONS = (
     ("Show display status", "vas display status --display :0"),
     ("List touchscreens", "vas display list-touch --display :0"),
+    ("Disable GDM Wayland", "sudo vas display disable-wayland"),
+    ("Enable GDM Wayland", "sudo vas display enable-wayland"),
     (
         "Apply runtime",
         "vas display apply --display :0 --output Virtual1 --touch 'Vending Virtual Touchscreen' --rotate normal",

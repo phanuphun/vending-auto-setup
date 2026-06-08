@@ -5,6 +5,7 @@ from display import (
     XORG_TOUCHSCREEN_SIGNATURE,
     build_display_session_block,
     build_display_session_script,
+    build_gdm_wayland_config,
     build_xorg_touchscreen_config,
     matrix_for_rotation,
     remove_managed_block,
@@ -47,6 +48,24 @@ def test_display_session_block_calls_script() -> None:
 
     assert DISPLAY_SESSION_SIGNATURE in block
     assert "/home/first/.config/vending/display.sh &" in block
+
+
+def test_gdm_wayland_disable_adds_daemon_setting() -> None:
+    config = build_gdm_wayland_config("[daemon]\nAutomaticLoginEnable=true\n", enabled=False)
+
+    assert "[daemon]\nWaylandEnable=false\nAutomaticLoginEnable=true\n" == config
+
+
+def test_gdm_wayland_enable_comments_active_disable_setting() -> None:
+    config = build_gdm_wayland_config("[daemon]\nWaylandEnable=false\n", enabled=True)
+
+    assert "[daemon]\n#WaylandEnable=false\n" == config
+
+
+def test_gdm_wayland_disable_creates_daemon_section_when_missing() -> None:
+    config = build_gdm_wayland_config("[security]\nDisallowTCP=true\n", enabled=False)
+
+    assert "[security]\nDisallowTCP=true\n\n[daemon]\nWaylandEnable=false\n" == config
 
 
 def test_upsert_managed_block_replaces_existing_block() -> None:
