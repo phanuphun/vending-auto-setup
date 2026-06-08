@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Sequence
 
 from flask import Flask, render_template, request
 
@@ -19,10 +20,11 @@ from display import (
     get_udevadm_touchscreen_names,
     parse_xinput_device_map,
 )
-from runner import CommandExecutionError, CommandRunner
+from runner import CommandExecutionError, CommandResult, CommandRunner
 from status import (
     ToolStatus,
     VpnStatus,
+    collect_gdm_wayland_status,
     collect_display_session_config_status,
     collect_display_session_script_status,
     collect_display_session_status,
@@ -313,6 +315,7 @@ def create_app() -> Flask:
             rotations=ROTATION_LABELS,
             default_display=default_display,
             session=collect_display_session_status(),
+            gdm_wayland=collect_gdm_wayland_status(),
             display_config=collect_display_session_config_status(),
             display_script=collect_display_session_script_status(),
             xorg_touchscreen=collect_xorg_touchscreen_config_status(),
@@ -377,6 +380,34 @@ def create_app() -> Flask:
             "display": x_display,
             "persistSession": persist_session,
             "persistXorg": persist_xorg,
+        }
+
+    @app.post("/api/display/wayland")
+    def display_wayland() -> tuple[dict[str, object], int] | dict[str, object]:
+        payload = request.get_json(silent=True) or {}
+        action = str(payload.get("action", "")).strip()
+        configurator = DisplayConfigurator(DisplayCommandRunner())
+        try:
+            if action == "disable":
+                configurator.disable_wayland()
+            elif action == "enable":
+                configurator.enable_wayland()
+            else:
+                return {"status": "error", "errors": [f"Unknown Wayland action: {action}"]}, 400
+        except (CommandExecutionError, OSError, ValueError) as error:
+            return {"status": "error", "errors": [str(error)]}, 500
+
+        status = collect_gdm_wayland_status()
+        return {
+            "status": "ok",
+            "action": action,
+            "gdmWayland": {
+                "disabled": status.disabled,
+                "exists": status.exists,
+                "readable": status.readable,
+                "value": status.value,
+                "path": status.path.as_posix(),
+            },
         }
 
     @app.get("/health")
@@ -507,8 +538,14 @@ def collect_display_devices(x_display: str | None = None) -> DisplayDevices:
     resolved_display = x_display or _default_x_display()
     xauthority = _default_xauthority()
 
-    xrandr = runner.run(configurator._with_x_env(["xrandr", "--query"], resolved_display, xauthority), check=False)
-    xinput = runner.run(configurator._with_x_env(["xinput", "list"], resolved_display, xauthority), check=False)
+    xrandr = _run_display_probe(
+        runner,
+        configurator._with_x_env(["xrandr", "--query"], resolved_display, xauthority),
+    )
+    xinput = _run_display_probe(
+        runner,
+        configurator._with_x_env(["xinput", "list"], resolved_display, xauthority),
+    )
 
     outputs = parse_xrandr_outputs(xrandr.stdout)
     xinput_map = parse_xinput_device_map(xinput.stdout)
@@ -519,8 +556,8 @@ def collect_display_devices(x_display: str | None = None) -> DisplayDevices:
             env_args = ["env", f"DISPLAY={resolved_display}"]
             if xauthority:
                 env_args.append(f"XAUTHORITY={xauthority}")
-            xrandr = runner.run(["runuser", "-u", desktop_user, "--", *env_args, "xrandr", "--query"], check=False)
-            xinput = runner.run(["runuser", "-u", desktop_user, "--", *env_args, "xinput", "list"], check=False)
+            xrandr = _run_display_probe(runner, ["runuser", "-u", desktop_user, "--", *env_args, "xrandr", "--query"])
+            xinput = _run_display_probe(runner, ["runuser", "-u", desktop_user, "--", *env_args, "xinput", "list"])
             outputs = parse_xrandr_outputs(xrandr.stdout)
             xinput_map = parse_xinput_device_map(xinput.stdout)
 
@@ -528,9 +565,19 @@ def collect_display_devices(x_display: str | None = None) -> DisplayDevices:
     return DisplayDevices(outputs=outputs, touch_devices=touch_devices)
 
 
+def _run_display_probe(runner: CommandRunner, args: Sequence[str]) -> CommandResult:
+    try:
+        return runner.run(args, check=False)
+    except OSError as error:
+        return CommandResult(tuple(args), 127, "", str(error))
+
+
 def _resolve_touch_devices(runner: CommandRunner, xinput_map: dict[str, int]) -> tuple[TouchDevice, ...]:
     """หา touchscreen devices โดยใช้ udevadm เป็นหลัก fallback ด้วย "touch" ใน name"""
-    udev_names = get_udevadm_touchscreen_names(runner)
+    try:
+        udev_names = get_udevadm_touchscreen_names(runner)
+    except OSError:
+        udev_names = frozenset()
     if udev_names:
         return tuple(
             TouchDevice(name=name, xinput_id=xinput_map.get(name))
@@ -578,8 +625,9 @@ def validate_display_apply(output: str, touch: str, rotate: str, devices: Displa
 def _allowed_config_paths() -> dict[str, Path]:
     """Allowlist ของ config files ที่อ่านได้ผ่าน API"""
     from display import _effective_home_config_path, _effective_home_script_path  # type: ignore[attr-defined]
-    from status import XORG_TOUCHSCREEN_CONFIG_PATH
+    from status import GDM_CUSTOM_CONFIG_PATH, XORG_TOUCHSCREEN_CONFIG_PATH
     return {
+        "gdm_custom": Path(GDM_CUSTOM_CONFIG_PATH),
         "xprofile": _effective_home_config_path(),
         "display_script": _effective_home_script_path(),
         "xorg_touchscreen": Path(XORG_TOUCHSCREEN_CONFIG_PATH),

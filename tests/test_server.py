@@ -23,6 +23,7 @@ from status import (
     DisplaySessionConfigStatus,
     DisplaySessionScriptStatus,
     DisplaySessionStatus,
+    GdmWaylandStatus,
     RemoteAccessStatus,
     ToolStatus,
     VpnStatus,
@@ -104,7 +105,31 @@ def test_display_route_renders_monitor_controls() -> None:
     assert "HDMI-1" in body
     assert "Vending Touchscreen" in body
     assert "id: 13" in body
+    assert "GDM Wayland" in body
+    assert 'data-wayland-action="disable"' in body
+    assert 'data-wayland-action="enable"' in body
     assert "Command Preview" in body
+
+
+def test_display_wayland_api_runs_requested_action() -> None:
+    app = create_app()
+
+    with patch("server.DisplayConfigurator.disable_wayland") as disable:
+        with patch("server.collect_gdm_wayland_status") as collect_status:
+            collect_status.return_value = GdmWaylandStatus(
+                path=Path("/etc/gdm3/custom.conf"),
+                exists=True,
+                readable=True,
+                disabled=True,
+                value="false",
+            )
+            response = app.test_client().post("/api/display/wayland", json={"action": "disable"})
+
+    assert response.status_code == 200
+    response_json = cast(dict[str, Any], response.json)
+    assert response_json["status"] == "ok"
+    assert cast(dict[str, Any], response_json["gdmWayland"])["disabled"] is True
+    disable.assert_called_once()
 
 
 def test_command_docs_route_renders_command_sections() -> None:

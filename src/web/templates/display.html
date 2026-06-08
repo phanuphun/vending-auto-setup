@@ -9,6 +9,18 @@
       <dl>
         <dt>Session</dt>
         <dd><span class="badge {{ 'ok' if session.is_x11 else 'warn' }}">{{ 'OK' if session.is_x11 else 'WARN' }}</span>{{ session.session_type }} via {{ session.source }}</dd>
+        <dt>GDM Wayland</dt>
+        <dd class="detail-value">
+          <span>
+            <span class="badge {{ 'ok' if gdm_wayland.disabled else 'warn' }}" id="gdmWaylandBadge">{{ 'OK' if gdm_wayland.disabled else 'WARN' }}</span>
+            <span id="gdmWaylandText">{{ 'disabled' if gdm_wayland.disabled else 'enabled/default' }}{% if gdm_wayland.value %} (WaylandEnable={{ gdm_wayland.value }}){% endif %} - {{ gdm_wayland.path.as_posix() }}</span>
+          </span>
+          <span class="detail-actions">
+            <button class="secondary-action compact-action" data-wayland-action="disable" type="button">Disable</button>
+            <button class="secondary-action compact-action" data-wayland-action="enable" type="button">Enable</button>
+            <button class="config-view-btn" data-config-key="gdm_custom" data-config-title="GDM custom.conf" type="button">View</button>
+          </span>
+        </dd>
         <dt>Monitors</dt>
         <dd>
           {% if outputs %}
@@ -59,72 +71,75 @@
     <pre class="config-file-content" id="configFileContent"></pre>
   </div>
 
-  <div class="display-header">
-    <h2>Monitor Setting</h2>
-    <button class="primary-action" id="applyDisplay" type="button">Apply</button>
-  </div>
+  <section class="panel monitor-setting-panel">
+    <div class="display-header">
+      <h2>Monitor Setting</h2>
+      <button class="primary-action" id="applyDisplay" type="button">Apply</button>
+    </div>
 
-  <div class="display-layout">
-    <div class="monitor-workspace">
-      <div class="monitor-frame">
-        <div class="monitor-preview-stage">
-          <div class="monitor-preview" id="monitorPreview" data-rotation="normal">
-            <div class="corner top-left"></div>
-            <div class="corner top-right"></div>
-            <div class="corner bottom-left"></div>
-            <div class="corner bottom-right"></div>
-            <div class="preview-label" id="previewLabel">Normal</div>
+    <div class="display-layout">
+      <div class="monitor-workspace">
+        <div class="monitor-frame">
+          <div class="monitor-preview-stage">
+            <div class="monitor-preview" id="monitorPreview" data-rotation="normal">
+              <div class="corner top-left"></div>
+              <div class="corner top-right"></div>
+              <div class="corner bottom-left"></div>
+              <div class="corner bottom-right"></div>
+              <div class="preview-label" id="previewLabel">Normal</div>
+            </div>
           </div>
+        </div>
+
+        <div class="rotation-controls" role="group" aria-label="Rotation">
+          {% for value, label in rotations %}
+          <button class="rotation-button {{ 'selected' if value == 'normal' else '' }}" type="button" data-rotation="{{ value }}">{{ label }}</button>
+          {% endfor %}
         </div>
       </div>
 
-      <div class="rotation-controls" role="group" aria-label="Rotation">
-        {% for value, label in rotations %}
-        <button class="rotation-button {{ 'selected' if value == 'normal' else '' }}" type="button" data-rotation="{{ value }}">{{ label }}</button>
-        {% endfor %}
-      </div>
+      <aside class="display-options">
+        <label for="displayOutput">Display</label>
+        <select id="displayOutput">
+          {% for output in outputs %}
+          <option value="{{ output }}">{{ output }}</option>
+          {% endfor %}
+        </select>
+
+        <label for="touchDevice">Touchscreen</label>
+        <select id="touchDevice">
+          {% for touch in touch_devices %}
+          <option value="{{ touch.name }}">{{ touch.name }}{% if touch.xinput_id is not none %} (id: {{ touch.xinput_id }}){% endif %}</option>
+          {% endfor %}
+        </select>
+
+        <label for="xDisplay">X display server</label>
+        <div class="inline-control">
+          <input id="xDisplay" value="{{ default_display }}" autocomplete="off">
+          <button id="refreshDevices" type="button">Refresh</button>
+        </div>
+        <p class="field-hint">Usually :0. Display output is the monitor name from xrandr.</p>
+
+        <label class="check-row">
+          <input id="persistSession" type="checkbox" checked>
+          Persist at login
+        </label>
+
+        <label class="check-row">
+          <input id="persistXorg" type="checkbox">
+          Persist touch in Xorg
+        </label>
+      </aside>
     </div>
 
-    <aside class="display-options">
-      <label for="displayOutput">Display</label>
-      <select id="displayOutput">
-        {% for output in outputs %}
-        <option value="{{ output }}">{{ output }}</option>
-        {% endfor %}
-      </select>
-
-      <label for="touchDevice">Touchscreen</label>
-      <select id="touchDevice">
-        {% for touch in touch_devices %}
-        <option value="{{ touch.name }}">{{ touch.name }}{% if touch.xinput_id is not none %} (id: {{ touch.xinput_id }}){% endif %}</option>
-        {% endfor %}
-      </select>
-
-      <label for="xDisplay">X display server</label>
-      <div class="inline-control">
-        <input id="xDisplay" value="{{ default_display }}" autocomplete="off">
-        <button id="refreshDevices" type="button">Refresh</button>
-      </div>
-      <p class="field-hint">Usually :0. Display output is the monitor name from xrandr.</p>
-
-      <label class="check-row">
-        <input id="persistSession" type="checkbox" checked>
-        Persist at login
-      </label>
-
-      <label class="check-row">
-        <input id="persistXorg" type="checkbox">
-        Persist touch in Xorg
-      </label>
-    </aside>
-  </div>
+    <div class="apply-result" id="applyResult" aria-live="polite"></div>
+  </section>
 
   <div class="command-preview">
     <h3>Command Preview</h3>
     <ul class="command-list" id="commandPreviewList"></ul>
   </div>
 
-  <div class="apply-result" id="applyResult" aria-live="polite"></div>
 </section>
 
 <script>
@@ -151,6 +166,8 @@ const touchSelect = document.getElementById("touchDevice");
 const xDisplayInput = document.getElementById("xDisplay");
 const persistSessionInput = document.getElementById("persistSession");
 const persistXorgInput = document.getElementById("persistXorg");
+const gdmWaylandBadge = document.getElementById("gdmWaylandBadge");
+const gdmWaylandText = document.getElementById("gdmWaylandText");
 let selectedRotation = "normal";
 
 function shellQuote(value) {
@@ -240,6 +257,34 @@ async function refreshDevices() {
   updatePreview();
 }
 
+function updateWaylandStatus(status) {
+  const disabled = Boolean(status.disabled);
+  gdmWaylandBadge.className = `badge ${disabled ? "ok" : "warn"}`;
+  gdmWaylandBadge.textContent = disabled ? "OK" : "WARN";
+  const mode = disabled ? "disabled" : "enabled/default";
+  const value = status.value ? ` (WaylandEnable=${status.value})` : "";
+  gdmWaylandText.textContent = `${mode}${value} - ${status.path}`;
+}
+
+async function setWayland(action) {
+  applyResult.textContent = `${action === "disable" ? "Disabling" : "Enabling"} Wayland...`;
+  applyResult.className = "apply-result";
+  const response = await fetch("{{ url_for('display_wayland') }}", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action }),
+  });
+  const result = await response.json();
+  if (!response.ok) {
+    applyResult.className = "apply-result error";
+    applyResult.textContent = (result.errors || ["Wayland control failed."]).join(" ");
+    return;
+  }
+  updateWaylandStatus(result.gdmWayland);
+  applyResult.className = "apply-result success";
+  applyResult.textContent = action === "disable" ? "Wayland disabled in GDM." : "Wayland enabled in GDM.";
+}
+
 document.querySelectorAll(".rotation-button").forEach((button) => {
   button.addEventListener("click", () => {
     selectedRotation = button.dataset.rotation;
@@ -257,6 +302,12 @@ document.querySelectorAll(".rotation-button").forEach((button) => {
 
 document.getElementById("refreshDevices").addEventListener("click", refreshDevices);
 xDisplayInput.addEventListener("change", refreshDevices);
+
+document.querySelectorAll("[data-wayland-action]").forEach((button) => {
+  button.addEventListener("click", () => {
+    setWayland(button.dataset.waylandAction);
+  });
+});
 
 document.getElementById("applyDisplay").addEventListener("click", async () => {
   applyResult.textContent = "Applying...";
