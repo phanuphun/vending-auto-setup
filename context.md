@@ -1,116 +1,138 @@
 # Session Context — vending-auto-setup
 
-วันที่: 2026-06-05  
-Branch: main  
-เครื่องทดสอบ: Ubuntu 22.04 LTS Desktop ใน VirtualBox (user: first)
+Date: 2026-06-05
+Branch: main
+Test machine: Ubuntu 22.04 LTS Desktop in VirtualBox (user: first)
 
 ---
 
-## สิ่งที่ทำในเซสชันนี้
+## Work Done This Session
 
-### 1. Fix: `sudo vas check` แสดงผลผิด (commits d2cb321, 60e222b)
+### 1. Fix: `sudo vas check` incorrect output (commits d2cb321, 60e222b)
 
-**ปัญหาที่พบ:**
-- `sudo vas check` → `[Session] WARN Display unknown (not detected)` เพราะ sudo ลบ `XDG_SESSION_TYPE` ออกจาก env
-- `sudo vas check` → `[Display Config]` ดูผิด path เป็น `/root/.xprofile` แทน `/home/first/.xprofile` เพราะ `Path.home()` เป็น module-level constant
-- `vas check` → Script WARN "not executable" เพราะ server (รันเป็น root) เขียนไฟล์แต่ chmod set execute bit ให้แค่ root
+**Problems found:**
+- `sudo vas check` → `[Session] WARN Display unknown (not detected)` because sudo strips `XDG_SESSION_TYPE` from the environment
+- `sudo vas check` → `[Display Config]` reads wrong path `/root/.xprofile` instead of `/home/first/.xprofile` because `Path.home()` was a module-level constant
+- `vas check` → Script WARN "not executable" because the server (running as root) wrote the file but `chmod` set the execute bit only for root
 
-**แก้ไขใน `src/status.py`:**
-- เพิ่ม `_effective_home()` ที่อ่าน `SUDO_USER` จาก env แล้ว resolve home จาก `pwd.getpwnam()` แทน `Path.home()`
-- เพิ่ม `_effective_home_config_path()` / `_effective_home_script_path()` สำหรับ call ที่ run time
-- เปลี่ยน `collect_display_session_config_status()` / `_script_status()` ให้รับ `path=None` และ resolve path ตอน call
-- เพิ่ม `_scan_loginctl_sessions()` — fallback scan ทุก session จาก `loginctl list-sessions` โดยไม่ต้องพึ่ง `XDG_SESSION_ID`
+**Fixed in `src/status.py`:**
+- Added `_effective_home()` that reads `SUDO_USER` from env and resolves home via `pwd.getpwnam()` instead of `Path.home()`
+- Added `_effective_home_config_path()` / `_effective_home_script_path()` computed at call time
+- Changed `collect_display_session_config_status()` / `_script_status()` to accept `path=None` and resolve at call time
+- Added `_scan_loginctl_sessions()` — fallback that scans all sessions from `loginctl list-sessions` without needing `XDG_SESSION_ID`
 
-**แก้ไขใน `src/display.py`:**
-- `persist_session()` เปลี่ยน default `path`/`script_path` เป็น `None` และ resolve ตอน call
-- chmod จาก `S_IXUSR` เป็น `755` (`S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH`)
-- เพิ่ม `_chown_to_effective_user()` — chown ไฟล์ไปให้ `SUDO_USER` หลัง server (root) เขียนไฟล์ใน home user
+**Fixed in `src/display.py`:**
+- `persist_session()` default `path`/`script_path` changed to `None`, resolved at call time
+- chmod changed from `S_IXUSR` to `755` (`S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH`)
+- Added `_chown_to_effective_user()` — chowns written files to `SUDO_USER` after server (root) writes to user home
 
-**แก้ไขใน `src/reset.py`:**
-- `reset_display_config()` ใช้ `_effective_home_*_path()` แทน constants
+**Fixed in `src/reset.py`:**
+- `reset_display_config()` uses `_effective_home_*_path()` instead of module-level constants
 
 ---
 
-### 2. Feature: Touchscreen detection ด้วย udevadm + `vas display list-touch` (commit b05ec4c)
+### 2. Feature: Touchscreen detection via udevadm + `vas display list-touch` (commit b05ec4c)
 
-**ปัญหาเดิม:**
-- `parse_xinput_touch_devices()` กรองด้วย "touch" ใน name เท่านั้น — ไม่น่าเชื่อถือ
-- ไม่มีทาง list touchscreen พร้อม xinput ID
+**Problem:** `parse_xinput_touch_devices()` filtered only by "touch" in device name — unreliable. No way to list touchscreens with their xinput ID.
 
-**เพิ่มใน `src/display.py`:**
+**Added to `src/display.py`:**
 ```
-TouchDevice(name, xinput_id)          # dataclass
-parse_xinput_device_map(output)        # parse xinput list → {name: id}
-get_udevadm_touchscreen_names(runner)  # อ่านชื่อ touchscreen จาก udevadm kernel database
-list_touch_devices(runner, display)    # combine udevadm + xinput → tuple[TouchDevice]
+TouchDevice(name, xinput_id)           # dataclass
+parse_xinput_device_map(output)         # parse xinput list full output → {name: id}
+get_udevadm_touchscreen_names(runner)   # read touchscreen names from udevadm kernel DB
+list_touch_devices(runner, display)     # combine udevadm + xinput → tuple[TouchDevice]
 DisplayConfigurator.print_touch_devices()
 ```
 
-**Logic การ detect:**
-1. ใช้ `udevadm info --export-db` → filter block ที่มี `ID_INPUT_TOUCHSCREEN=1` → ได้ชื่อ
-2. Cross-ref กับ `xinput list` → ได้ xinput ID
-3. Fallback: filter xinput ด้วย "touch" ใน name
+**Detection logic:**
+1. `udevadm info --export-db` → filter blocks with `ID_INPUT_TOUCHSCREEN=1` → get names
+2. Cross-reference with `xinput list` → get xinput ID
+3. Fallback: filter xinput by "touch" in name
 
-**เพิ่มใน `src/server.py`:**
-- `DisplayDevices.touch_devices` เปลี่ยนเป็น `tuple[TouchDevice, ...]`
-- `collect_display_devices()` ใช้ udevadm-based detection
-- `/api/display/devices` return `{"name": str, "id": int|null}` แทน string
-- `validate_display_apply()` ใช้ `touch not in (d.name for d in devices.touch_devices)`
+**Updated in `src/server.py`:**
+- `DisplayDevices.touch_devices` changed to `tuple[TouchDevice, ...]`
+- `collect_display_devices()` uses udevadm-based detection
+- `/api/display/devices` returns `{"name": str, "id": int|null}` per device
+- `validate_display_apply()` uses `touch not in (d.name for d in devices.touch_devices)`
 
-**เพิ่มใน `src/cli.py`:**
+**Added to `src/cli.py`:**
 - `vas display list-touch [--display :0] [--xauthority PATH]`
 
-**เปลี่ยนใน `src/web/templates/display.html`:**
-- Touchscreen dropdown แสดง `Name (id: N)`
-- JS `replaceOptions()` รองรับ `{name, id}` objects จาก API
+**Updated `src/web/templates/display.html`:**
+- Touchscreen dropdown shows `Name (id: N)`
+- JS `replaceOptions()` handles `{name, id}` objects from API
 
 ---
 
 ### 3. Feature: Display Status Bar + Config File Viewer (commit f848e43)
 
-**เพิ่มใน `src/server.py`:**
-- `display_settings()` ส่ง `session`, `display_config`, `display_script`, `xorg_touchscreen` ไปยัง template
-- `/api/display/config-content?key=<key>` endpoint อ่านไฟล์ config พร้อม allowlist:
+**Added to `src/server.py`:**
+- `display_settings()` passes `session`, `display_config`, `display_script`, `xorg_touchscreen` to template
+- `/api/display/config-content?key=<key>` endpoint reads config files with allowlist:
   - `xprofile` → `~/.xprofile`
   - `display_script` → `~/.config/vending-auto-setup/display-session.sh`
   - `xorg_touchscreen` → `/etc/X11/xorg.conf.d/99-vending-touchscreen.conf`
 - `_allowed_config_paths()` helper
 
-**เปลี่ยนใน `src/web/templates/display.html`:**
-- Status bar แสดง:
-  - แถวบน: Session (X11/Wayland + OK/WARN), Monitors (chip ต่อจอ), Touchscreens (chip + id)
-  - แถวล่าง: Config file statuses (.xprofile, display-session.sh, Xorg) พร้อมปุ่ม View
-- Config File Viewer: panel แสดง path + เนื้อหาไฟล์ inline (max-height 260px, scrollable)
+**Updated `src/web/templates/display.html`:**
+- Status bar with two rows:
+  - Top row: Session (X11/Wayland + OK/WARN chip), Monitors (chip per output), Touchscreens (chip + id)
+  - Bottom row: Config file statuses (.xprofile, display-session.sh, Xorg) each with View button
+- Config File Viewer: inline panel showing file path + content (max-height 260px, scrollable)
 
 ---
 
-## สถานะไฟล์หลัก
+### 4. Documentation (this session)
 
-| ไฟล์ | สถานะ |
+- Rewrote `README.md` in English — features, first-time installation, all commands, troubleshooting
+- Researched Wayland support — see `docs/research.md` for full findings
+- Updated `TODO.md` to English with Wayland limitations and improvement backlog
+- Created `context.md` for agent handoff
+
+---
+
+## Modified Files Summary
+
+| File | Change |
 |---|---|
-| `src/status.py` | แก้ home path + session detection |
-| `src/display.py` | เพิ่ม TouchDevice, udevadm detection, chmod/chown fix |
-| `src/server.py` | DisplayDevices → TouchDevice, API updates, config-content endpoint |
-| `src/reset.py` | ใช้ _effective_home_*_path() |
-| `src/cli.py` | เพิ่ม `display list-touch` |
+| `src/status.py` | Home path fix + session detection fix |
+| `src/display.py` | TouchDevice, udevadm detection, chmod/chown fix |
+| `src/server.py` | DisplayDevices → TouchDevice, API updates, config-content endpoint, status bar data |
+| `src/reset.py` | Uses `_effective_home_*_path()` |
+| `src/cli.py` | Added `display list-touch` |
 | `src/web/templates/display.html` | Status bar + Config viewer |
-| `tests/test_server.py` | อัปเดต tests ตาม TouchDevice |
+| `tests/test_server.py` | Updated for TouchDevice |
+| `README.md` | Full rewrite in English |
+| `TODO.md` | Translated to English + Wayland section |
+| `docs/research.md` | Added Wayland research |
+| `context.md` | This file |
 
 ---
 
-## Known Issues / ข้อควรระวัง
+## Known Issues / Warnings
 
-- git index อาจ corrupt ได้ใน sandbox เมื่อ commit ผ่าน Cowork — ให้ commit จากเครื่อง VM โดยตรง
-- lock files (`.git/HEAD.lock`, `.git/index.lock`) จาก sandbox อาจค้างอยู่ใน Windows NTFS — ลบด้วย `del` จาก CMD/PowerShell
-- `display-session.sh` ต้องมี executable bit — ถ้าถูกสร้างโดย server (root) จะ chown ให้ user จริงอัตโนมัติ
-- `vas display list-touch` ต้องรันใน X session หรือส่ง `--display :0` เพื่อให้ xinput ทำงานได้
+- **git index may corrupt** in Cowork sandbox when committing — commit directly from the VM terminal
+- **lock files** (`.git/HEAD.lock`, `.git/index.lock`) from sandbox may persist on Windows NTFS — delete with `del` from CMD/PowerShell
+- `display-session.sh` needs executable bit — if created by the server (root), `_chown_to_effective_user()` handles ownership automatically
+- `vas display list-touch` requires an X session or `--display :0` for xinput cross-reference (udevadm part works without X)
 
 ---
 
-## สิ่งที่ควรทำต่อ (จาก TODO.md + session นี้)
+## Wayland Research Summary
 
-- เพิ่ม command `display configure` แบบ guided (ถาม output, touch, rotate ทีละขั้น)
-- เพิ่ม auto-select touch device ถ้าเจอแค่ตัวเดียว
-- เพิ่ม log ของ `display-session.sh` ดูได้จาก web UI
-- เพิ่ม check Docker daemon active + user อยู่ใน docker group
-- ทำ `.deb` package หลัง CLI stable
+Researched 2026-06-05. Full notes in `docs/research.md`.
+
+- `xrandr` / `xinput` **do not work** on Wayland
+- GNOME Wayland display rotation requires D-Bus (`gnome-randr` or direct `org.gnome.Mutter.DisplayConfig`)
+- Touchscreen mapping: no universal Wayland tool; best option is **udev hwdb** (kernel-level, works on X11 too)
+- **Short-term kiosk fix:** force X11 via GDM — zero code changes needed
+- **Long-term:** `DisplayBackend` abstraction with `X11Backend` / `WaylandGnomeBackend` / `WaylandWlrootsBackend`
+
+---
+
+## Next Steps (suggested)
+
+- Commit all pending changes from the VM terminal after clearing git lock files
+- Add `display configure` guided interactive command
+- Research real-time touchscreen test via SSE + `python3-evdev`
+- Consider udev hwdb as a second persistence path for touchscreen (works on Wayland too)

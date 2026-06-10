@@ -1,123 +1,84 @@
 # TODO
 
-## สถานะปัจจุบัน
+## Current State
 
-Phase 1 ติดตั้ง Git, Node.js, npm และ Docker ผ่าน bootstrap script ได้แล้ว
+**Phase 1** — Core tool installation is complete and working:
+- Git, Node.js (v22), Docker Engine, AnyDesk installable via `vas install --component all`
+- Bootstrap script works on a fresh Ubuntu 22.04 machine without Git
+- Self-update via `vas update` from GitHub
 
-Phase 2 ส่วน display/touchscreen เริ่มทำแล้ว:
+**Phase 2** — Display/touchscreen configuration is working for X11:
+- Session type detection (X11 / Wayland / unknown)
+- List touchscreen devices with xinput ID via `vas display list-touch` (udevadm-based)
+- Runtime display rotation via `xrandr`
+- Runtime touchscreen coordinate mapping via `xinput`
+- Persist touchscreen matrix via Xorg InputClass config
+- Persist display rotation via `~/.xprofile` + retry script
+- Web dashboard with real-time display status bar and config file viewer
+- Virtual touchscreen POC for VirtualBox testing
 
-- ตรวจ X11/Wayland ผ่าน `vending-auto-setup check`
-- หมุนจอ runtime ผ่าน `display apply`
-- map touchscreen runtime ผ่าน `xinput`
-- persist touchscreen matrix ผ่าน Xorg config
-- persist display rotation ผ่าน session retry script
-- มี virtual touchscreen POC สำหรับทดสอบใน VirtualBox
+**Phase 3** — WireGuard VPN is implemented:
+- Install, validate, save, sync, history, unsync
+- Secret masking in all output by default
+- Backup before overwrite, `chmod 600` on active config
 
-## WireGuard
+---
 
-เริ่ม implement WireGuard แล้ว
+## Known Limitations
 
-สิ่งที่ทำได้:
+### Display / Wayland
+- All display and touchscreen commands require an **X11 session**
+- Wayland session shows `WARN` in `vas check` and `vas display status`
+- `xrandr`, `xinput` do not work under Wayland
+- See `docs/research.md` for full Wayland research and migration options
+- **Short-term workaround:** force X11 session via GDM config (no code changes needed)
 
-- ติดตั้ง `wireguard`
-- ตรวจสถานะ command `wg`, `wg-quick`
-- ตรวจ config ที่ save ใน app storage และ config ที่ active ใน `/etc/wireguard`
-- ตรวจ service `wg-quick@<interface>` ว่า enabled/active หรือไม่
-- สร้าง template config
-- validate config ก่อน save/sync
-- save config เข้า app storage โดยยังไม่ apply จริง
-- sync config ไป `/etc/wireguard/<interface>.conf`
-- backup config เดิมก่อน sync
-- ตั้ง permission config เป็น `600`
-- เก็บ history ของ config ที่ sync/unsync
-- อ่าน history แบบ mask secret เป็นค่า default
-- unsync เพื่อ disable service และนำ active config ออก
-- รองรับ dry-run ก่อนทำจริง
-- ติดตั้งเฉพาะ component ที่เลือกผ่าน `install --component`
-- ถอนติดตั้งเฉพาะ component ที่เลือกผ่าน `uninstall --component`
-- reset component ที่เลือกโดยถอน package/service และลบ config ที่โปรแกรมสร้าง
-- reset Docker โดยไม่ลบ `/var/lib/docker`
-- install preflight เช็กเวลาเครื่องกับ Ubuntu archive server และพยายามแก้ drift ก่อน `apt-get update`
-- bootstrap script รองรับ `--install-cli` เพื่อติดตั้ง wrapper ลง `/usr/local/bin` โดยไม่ต้องใช้ `pip`
-- เพิ่ม alias `vas`, command `--version`, และ `update` สำหรับ self-update จาก GitHub
+### PM2
+- `vas check` shows `[PM2][ERROR] Permission denied` when run as sudo
+- PM2 global install is user-scoped; sudo context cannot see user PM2
 
-คำสั่งหลัก:
+---
 
-```bash
-vending-auto-setup wireguard status
-```
+## Improvements to Consider
 
-```bash
-sudo vending-auto-setup wireguard install
-```
+### Display / Touchscreen
+- Add `display configure` — interactive guided setup (asks output, touch, rotate step by step)
+- Add auto-select touch device when only one is detected
+- Add log viewer for `display-session.sh` in the web UI
+- Wayland support: udev hwdb for touchscreen calibration (compositor-agnostic)
+- Wayland support: `gnome-randr` (GNOME) / `wlr-randr` (wlroots) backend for display rotation
+- Wayland support: systemd user service as persistence mechanism (replaces `~/.xprofile`)
+- Real-time touchscreen test via SSE + `python3-evdev` (reads `/dev/input/eventX` directly)
 
-```bash
-vending-auto-setup wireguard init-config --name wg0 --output ./wg0.conf
-```
+### System Checks
+- Check whether Docker daemon is active (`docker info`)
+- Check whether the current user is in the `docker` group
+- Check available disk space before installation
 
-```bash
-vending-auto-setup wireguard validate --config ./wg0.conf
-```
+### Packaging
+- Build `.deb` package once CLI is stable
+- Set up apt repository (S3 / Cloudflare R2 / GitHub Pages) for `apt upgrade` support
+- Consider Launchpad PPA for Ubuntu ecosystem distribution
 
-```bash
-vending-auto-setup wireguard save --name wg0 --config ./wg0.conf
-```
+### WireGuard
+- Stricter base64 key format validation without leaking the value
+- `wireguard restore` command to roll back to a previous history snapshot
+- History rotation policy (max N snapshots)
+- Option to use `wg-quick up` instead of `systemctl restart` for environments without systemd
 
-```bash
-sudo vending-auto-setup wireguard sync --name wg0
-```
+### Web Dashboard
+- Real-time touchscreen event stream (SSE + evdev) in the display test panel
+- Dark mode support
 
-```bash
-vending-auto-setup wireguard history --name wg0
-```
+---
 
-```bash
-vending-auto-setup wireguard show --name wg0 --id <history-id>
-```
+## Wayland Research Summary
 
-```bash
-sudo vending-auto-setup wireguard unsync --name wg0
-```
+Researched 2026-06-05. Full notes in `docs/research.md`.
 
-```bash
-sudo vending-auto-setup install --component all
-```
-
-```bash
-sudo vending-auto-setup install --component node --component docker
-```
-
-```bash
-sudo vending-auto-setup uninstall --component docker
-```
-
-```bash
-sudo vending-auto-setup reset --component all
-```
-
-ข้อควรระวัง:
-
-- ห้าม generate หรือ commit private key ลง repo
-- ห้าม print private key ลง terminal/log
-- ต้อง backup config เดิมก่อนเขียนทับ
-- ต้อง validate permission ของ `/etc/wireguard/*.conf`
-- ควรใช้ `chmod 600` กับ config
-- ต้องคิด flow กรณีเครื่องไม่มี internet หลังเชื่อม VPN
-
-งานที่ควรปรับปรุงต่อ:
-
-- เพิ่ม validation รูปแบบ key/base64 ให้เข้มขึ้นโดยยังไม่ leak secret
-- เพิ่ม command restore จาก history
-- เพิ่ม policy กำหนดจำนวน history สูงสุดหรือ rotate history
-- เพิ่ม option เลือก `wg-quick up` แทน `systemctl restart` สำหรับบาง environment
-- เพิ่ม integration test บน Ubuntu จริงที่มี `systemd` และ `wireguard`
-
-## งานที่ควรปรับปรุงต่อ
-
-- เพิ่ม command รวมสำหรับ setup display แบบครบชุด เช่น `display configure`
-- เพิ่มการ detect output/touch device แบบ interactive หรือ auto-select
-- เพิ่ม log ของ `display-session.sh`
-- เพิ่ม check ว่า Docker daemon active หรือไม่
-- เพิ่ม check ว่า user อยู่ใน `docker` group หรือไม่
-- ทำ `.deb` package หลัง CLI stable
-- พิจารณา apt repository หรือ managed package hosting หลังจาก POC เสถียร
+**TL;DR:**
+- `xrandr` / `xinput` do not exist on Wayland
+- Display rotation on GNOME Wayland requires D-Bus calls (`gnome-randr`)
+- Touchscreen mapping has no universal Wayland equivalent; best cross-compositor option is udev hwdb (kernel-level, works on X11 too)
+- For kiosk use, forcing X11 via GDM is the lowest-friction short-term solution
+- Full Wayland support requires a `DisplayBackend` abstraction with compositor-specific implementations

@@ -284,20 +284,93 @@ xinput test-xi2 13           # monitor raw touch events in real-time
 
 ## Local Development
 
+### Prerequisites
+
+- Python 3.10+ (`python3 --version`)
+- Git
+- `uv` (recommended) or `pip`
+
+Install `uv` if not present:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+### Moving the project to a new machine
+
+If you already have the source (USB, zip, scp) and don't want to re-clone:
+
+```bash
+# Copy the project folder to the new machine, then:
+cd vending-auto-setup
+
+# Remove the old virtual environment (not portable between machines)
+rm -rf .venv
+
+# Recreate it fresh
+uv venv
+source .venv/bin/activate
+uv pip install -e ".[dev]"
+```
+
+> `.venv` is machine-specific — always delete and recreate it when copying the project to a new machine.
+
+---
+
+### Clone and set up (new machine)
+
 ```bash
 git clone https://github.com/phanuphun/vending-auto-setup.git
 cd vending-auto-setup
+```
 
+**Using uv (recommended):**
+
+```bash
+uv venv
+source .venv/bin/activate        # Linux/macOS
+# .venv\Scripts\activate         # Windows
+
+uv pip install -e ".[dev]"
+```
+
+**Using pip (fallback):**
+
+```bash
 python3 -m venv .venv
-. .venv/bin/activate
+source .venv/bin/activate
 pip install -e ".[dev]"
+```
 
-# Run without installing
+### Run without installing system-wide
+
+```bash
 vas check
 PYTHONPATH=src python3 -m cli check
+```
 
-# Run tests
+### Run tests
+
+```bash
 PYTHONPATH=src python3 -m pytest tests/ -q
+```
+
+### Type checking and linting
+
+```bash
+# Type check
+mypy src tests
+
+# Lint / auto-fix
+ruff check src tests
+ruff format src tests
+```
+
+### Verify the web dashboard locally
+
+```bash
+PYTHONPATH=src python3 -m server --host 127.0.0.1 --port 8888
+# Open http://127.0.0.1:8888
 ```
 
 ---
